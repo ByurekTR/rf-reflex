@@ -899,9 +899,563 @@
     }
   ];
 
+  /* ---------- hidden chapters: each is revealed when one of its parent chapters is completed ---------- */
+  MODULES.push(
+    {
+      id: 'snr', name: 'Signal-to-noise maths', group: 'RF', blurb: 'SNR from levels and voltages, adding noise, bandwidth.', parents: ['db', 'dbm'],
+      anchors: ['SNR(dB) = signal dBm − noise dBm; from voltages use 20·log', 'Two equal noise sources add 3 dB', 'An interferer at the floor costs 3 dB; 6 dB below costs 1 dB; 10 dB below costs 0.4 dB', 'Narrowing the bandwidth by ×10 gains 10 dB of SNR'],
+      levels: ['SNR from power levels and voltages', 'Adding noise sources and interferers', 'SNR against bandwidth and noise figure'],
+      types: {
+        lvl: function () { var sgl = pick([-30, -50, -70, -90]), d = pick([6, 10, 15, 25, 40]); return num('Signal ' + sg(sgl) + ' dBm, noise ' + sg(sgl - d) + ' dBm. SNR?', d, 'dB', DB, 'Subtract the levels: ' + sg(sgl) + ' − (' + sg(sgl - d) + ') = ' + d + ' dB.', [-d]); },
+        volt: function () { var p = pick([[1, 0.01], [0.5, 0.05], [1, 0.1], [3.16, 0.1], [0.1, 0.001], [1, 0.001], [2, 1]]), a = calc.db20(p[0] / p[1]); return num('Signal ' + qty(p[0], 'V') + ' RMS, noise ' + qty(p[1], 'V') + ' RMS. SNR?', a, 'dB', DB, 'Voltage ratio ×' + fmt(p[0] / p[1]) + ' → 20·log = ' + f1(a) + ' dB.', [a / 2]); },
+        nsum: lv(2, function () { var k = pick([2, 3, 4, 10]); return num('Combining ' + k + ' equal, uncorrelated noise sources raises the noise by?', calc.db10(k), 'dB', DB, 'Noise powers add: 10·log(' + k + ') = ' + f1(calc.db10(k)) + ' dB.', [calc.db20(k)]); }),
+        desense: lv(2, function () { var d = pick([0, 3, 6, 10]), a = calc.db10(1 + calc.lin10(-d)); return num('An interferer ' + (d ? d + ' dB below' : 'exactly at') + ' the noise floor raises the floor by?', a, 'dB', { abs: 0.25 }, 'Add the powers: 10·log(1 + 10^(−' + d + '/10)) = ' + f1(a) + ' dB. At the floor 3 dB, 6 dB below 1 dB, 10 dB below 0.4 dB.', null, { pos: true }); }),
+        snrb: lv(3, function () { var s0 = pick([10, 20, 30]), p = pick([[1e6, 1e4], [1e6, 1e5], [1e5, 1e3], [1e4, 1e6], [2e6, 2e5], [1e3, 1e6]]), a = s0 + calc.db10(p[0] / p[1]); return num('A signal has ' + s0 + ' dB SNR in ' + qty(p[0], 'Hz') + '. Its SNR in ' + qty(p[1], 'Hz') + ' (signal fits either way)?', a, 'dB', DB, 'Noise scales with bandwidth: ' + s0 + ' + 10·log(' + qty(p[0], 'Hz') + ' / ' + qty(p[1], 'Hz') + ') = ' + f1(a) + ' dB.'); }),
+        nfdeg: lv(3, function () { var s0 = pick([20, 30, 40]), nf = pick([1, 2, 3, 6]); return num('A source at the thermal noise floor has ' + s0 + ' dB SNR. After a stage with NF ' + nf + ' dB?', s0 - nf, 'dB', DB, 'Noise figure is exactly the SNR lost for a source at 290 K: ' + s0 + ' − ' + nf + ' = ' + (s0 - nf) + ' dB.', [s0 + nf]); })
+      }
+    },
+    {
+      id: 'dr', name: 'Dynamic range', group: 'RF', blurb: 'Compression point, intercept point, spur-free range.', parents: ['chain'],
+      anchors: ['Output P1dB = input P1dB + gain − 1', 'OIP3 = IIP3 + gain', 'IP3 sits roughly 10 dB above P1dB', 'Third-order products rise 3 dB per 1 dB of input', 'SFDR = ⅔ × (IIP3 − noise floor)'],
+      levels: ['Compression and intercept points across a gain stage', 'How intermod grows with drive level', 'Spur-free dynamic range and stages referred to the input'],
+      types: {
+        p1: function () { var ip = pick([-30, -20, -10, 0]), g = pick([10, 15, 20, 30]); return rnd() < 0.5 ? num('Input P1dB ' + sg(ip) + ' dBm, gain ' + g + ' dB. Output P1dB?', ip + g - 1, 'dBm', DB, 'At compression the gain is down 1 dB: ' + sg(ip) + ' + ' + g + ' − 1 = ' + sg(ip + g - 1) + ' dBm.', [ip + g, ip + g + 1]) : num('Output P1dB ' + sg(ip + g - 1) + ' dBm, gain ' + g + ' dB. Input P1dB?', ip, 'dBm', DB, 'Input P1dB = output P1dB − (gain − 1) = ' + sg(ip) + ' dBm.', [ip - 1, ip + 1]); },
+        oip: function () { var ii = pick([-10, 0, 5, 10, 20]), g = pick([10, 13, 20, 25]); return rnd() < 0.5 ? num('IIP3 ' + sg(ii) + ' dBm, gain ' + g + ' dB. OIP3?', ii + g, 'dBm', DB, 'OIP3 = IIP3 + gain = ' + sg(ii + g) + ' dBm.', [ii - g]) : num('OIP3 ' + sg(ii + g) + ' dBm, gain ' + g + ' dB. IIP3?', ii, 'dBm', DB, 'IIP3 = OIP3 − gain = ' + sg(ii) + ' dBm.', [ii + 2 * g]); },
+        slope: lv(2, function () { var x = pick([1, 2, 3, 5, 10]); return rnd() < 0.5 ? num('The input tones rise by ' + x + ' dB. The third-order products rise by?', 3 * x, 'dB', DB, 'Third-order products have a 3:1 slope: ' + (3 * x) + ' dB.', [x, 2 * x]) : num('The input tones rise by ' + x + ' dB. The gap between tones and third-order products shrinks by?', 2 * x, 'dB', DB, 'Products rise 3 dB per dB, tones 1 dB per dB, so the gap closes by 2 dB per dB: ' + (2 * x) + ' dB.', [x, 3 * x]); }),
+        rule: lv(2, function () { var p1 = pick([0, 10, 17, 20, 30]); return num('An amplifier has output P1dB = ' + sg(p1) + ' dBm. Estimate its OIP3 (rule of thumb)?', p1 + 10, 'dBm', { abs: 1 }, 'IP3 is typically about 10 dB above P1dB: roughly ' + sg(p1 + 10) + ' dBm.', [p1 - 10, p1 + 3]); }),
+        sfdr: lv(3, function () { var ii = pick([-10, 0, 10, 20]), fl = pick([-120, -110, -100, -90]), a = 2 / 3 * (ii - fl); return num('IIP3 ' + sg(ii) + ' dBm, noise floor ' + sg(fl) + ' dBm. Spur-free dynamic range?', a, 'dB', { abs: 0.7 }, 'SFDR = ⅔ × (IIP3 − floor) = ⅔ × ' + (ii - fl) + ' = ' + f1(a) + ' dB.', [ii - fl, (ii - fl) / 2], { pos: true }); }),
+        refin: lv(3, function () { var g = pick([10, 15, 20, 25]), ii = pick([5, 10, 15, 20]); return num('A ' + g + ' dB preamp sits ahead of a mixer with IIP3 ' + sg(ii) + ' dBm. The mixer\'s IIP3 referred to the antenna?', ii - g, 'dBm', DB, 'Gain in front lowers the intercept seen at the input: ' + sg(ii) + ' − ' + g + ' = ' + sg(ii - g) + ' dBm. More preamp gain means less strong-signal headroom.', [ii + g]); })
+      }
+    },
+    {
+      id: 'tl', name: 'Transmission lines', group: 'RF', blurb: 'Stubs, quarter-wave inversion, cable loss.', parents: ['wave', 'match'],
+      anchors: ['A λ/4 line inverts: Z_in = Z₀² / Z_L', 'A λ/2 line repeats the load', 'Shorted λ/4 stub looks open; open λ/4 stub looks shorted', 'Cable loss in dB scales with length and roughly with √frequency', 'Return loss seen through a lossy line improves by twice the loss'],
+      levels: ['Stub behaviour and loss against length', 'Quarter-wave inversion and loss against frequency', 'Return loss through cable, and voltage on the line'],
+      types: {
+        stub: function () { var o = ['An open circuit', 'A short circuit', 'An inductor', 'A capacitor'];
+          return item([['A shorted stub exactly λ/4 long looks like', 'An open circuit', o, 'A quarter wave inverts the impedance: a short becomes an open.'], ['An open stub exactly λ/4 long looks like', 'A short circuit', o, 'A quarter wave inverts the impedance: an open becomes a short.'],
+            ['A shorted stub exactly λ/2 long looks like', 'A short circuit', o, 'A half wave repeats whatever is at the far end.'], ['A shorted stub shorter than λ/4 looks like', 'An inductor', o, 'Below a quarter wave a shorted stub is inductive; an open stub is capacitive.'],
+            ['An open stub shorter than λ/4 looks like', 'A capacitor', o, 'Below a quarter wave an open stub is capacitive; a shorted stub is inductive.']]); },
+        lossl: function () { var p = pick([[6, 25], [10, 30], [20, 15], [4, 50], [12, 10], [3, 200]]), a = p[0] * p[1] / 100; return num('A cable loses ' + p[0] + ' dB per 100 m. Loss of a ' + p[1] + ' m run?', a, 'dB', { abs: 0.2 }, 'Loss in dB is proportional to length: ' + p[0] + ' × ' + p[1] + '/100 = ' + f1(a) + ' dB.', null, { pos: true }); },
+        inv: lv(2, function () { var p = pick([[50, 100], [50, 25], [50, 200], [75, 50], [50, 10], [100, 50]]), z = p[0] * p[0] / p[1]; return num('A λ/4 section of ' + p[0] + ' Ω line ends in ' + p[1] + ' Ω. Input impedance?', z, 'Ω', R5, 'Z_in = Z₀² / Z_L = ' + (p[0] * p[0]) + ' / ' + p[1] + ' = ' + fmt(z, 4) + ' Ω.', [p[1], Math.sqrt(p[0] * p[1])]); }),
+        lossf: lv(2, function () { var l = pick([1, 2, 3, 5]), p = pick([[100, 400], [50, 450], [145, 2320], [10, 1000], [435, 1740]]), a = l * Math.sqrt(p[1] / p[0]); return num('A cable run loses ' + l + ' dB at ' + p[0] + ' MHz. Estimated loss at ' + p[1] + ' MHz (skin-effect scaling)?', a, 'dB', { abs: 0.3 }, 'Loss in dB grows with √frequency: ' + l + ' × √(' + p[1] + '/' + p[0] + ') = ' + l + ' × ' + fmt(Math.sqrt(p[1] / p[0])) + ' = ' + f1(a) + ' dB.', [l * p[1] / p[0]], { pos: true }); }),
+        rlin: lv(3, function () { var rl = pick([6, 10, 14]), l = pick([1, 2, 3]); return num('An antenna has ' + rl + ' dB return loss, behind a cable with ' + l + ' dB loss. Return loss measured at the transmitter?', rl + 2 * l, 'dB', DB, 'The reflection crosses the cable twice: ' + rl + ' + 2 × ' + l + ' = ' + (rl + 2 * l) + ' dB. Lossy cable makes a bad antenna look good.', [rl + l, rl - 2 * l]); }),
+        vline: lv(3, function () { var p = pick([[1, 50], [5, 50], [50, 50], [100, 50], [1000, 50], [100, 75]]), v = Math.sqrt(p[0] * p[1]); return num('RMS voltage on a matched ' + p[1] + ' Ω line carrying ' + qty(p[0], 'W') + '?', v, 'V', R5, 'V = √(P·Z₀) = √(' + (p[0] * p[1]) + ') = ' + fmt(v) + ' V.'); })
+      }
+    },
+    {
+      id: 'sys', name: 'System noise & G/T', group: 'RF', blurb: 'System temperature, G/T, and C/N₀ over a path.', parents: ['noise', 'link'],
+      anchors: ['T_sys = antenna temperature + receiver temperature', 'Noise density = −198.6 dBm/Hz + 10·log(T)', 'G/T (dB/K) = antenna gain − 10·log(T_sys)', 'C/N₀ = EIRP(dBW) − path loss + G/T + 228.6', 'C/N = C/N₀ − 10·log(bandwidth)'],
+      levels: ['System temperature and noise density', 'G/T and what cooling buys', 'C/N₀ and C/N over a whole link'],
+      types: {
+        tsys: function () { var ta = pick([20, 50, 100, 150, 290]), tr = pick([35, 75, 170, 290]); return num('Antenna temperature ' + ta + ' K, receiver noise temperature ' + tr + ' K. System temperature?', ta + tr, 'K', R5, 'They add: ' + ta + ' + ' + tr + ' = ' + (ta + tr) + ' K.'); },
+        n0t: function () { var t = pick([29, 100, 290, 580, 1000, 2900]), a = -198.6 + calc.db10(t); return num('Noise density for a system temperature of ' + t + ' K?', a, 'dBm/Hz', DB, '−198.6 + 10·log(' + t + ') = ' + f1(a) + ' dBm/Hz. At 290 K that is the familiar −174.'); },
+        gt: lv(2, function () { var g = pick([20, 30, 35, 40, 50]), t = pick([50, 100, 200, 400, 1000]), a = g - calc.db10(t); return num('Antenna gain ' + g + ' dBi, system temperature ' + t + ' K. G/T?', a, 'dB/K', DB, 'G/T = ' + g + ' − 10·log(' + t + ') = ' + g + ' − ' + f1(calc.db10(t)) + ' = ' + f1(a) + ' dB/K.', [g + calc.db10(t)]); }),
+        cool: lv(2, function () { var p = pick([[300, 150], [300, 100], [200, 50], [1000, 100], [290, 145], [150, 75]]), a = calc.db10(p[0] / p[1]); return num('System temperature drops from ' + p[0] + ' K to ' + p[1] + ' K. SNR improves by?', a, 'dB', DB, '10·log(' + p[0] + '/' + p[1] + ') = ' + f1(a) + ' dB. Halving T_sys is worth 3 dB, the same as doubling the dish area.'); }),
+        cn0: lv(3, function () { var e = pick([30, 40, 50]), pl = pick([160, 180, 190, 200, 205]), gt = pick([0, 10, 20, 30]), a = e - pl + gt + 228.6; return num('EIRP ' + e + ' dBW, path loss ' + pl + ' dB, receive G/T ' + gt + ' dB/K. C/N₀?', a, 'dB-Hz', DB, e + ' − ' + pl + ' + ' + gt + ' + 228.6 = ' + f1(a) + ' dB-Hz. The 228.6 is Boltzmann\'s constant in dBW/K/Hz.'); }),
+        cn: lv(3, function () { var c = pick([50, 60, 70, 80]), b = pick([1e3, 1e4, 1e5, 1e6]); return num('C/N₀ of ' + c + ' dB-Hz in a ' + qty(b, 'Hz') + ' bandwidth: C/N?', c - calc.db10(b), 'dB', DB, 'C/N = C/N₀ − 10·log(B) = ' + c + ' − ' + f1(calc.db10(b)) + ' = ' + f1(c - calc.db10(b)) + ' dB.', [c + calc.db10(b)]); })
+      }
+    },
+    {
+      id: 'radar', name: 'Radar range equation', group: 'RF', blurb: 'The fourth-power law, duty cycle, pulse energy.', parents: ['time', 'pg'],
+      anchors: ['Echo power falls as 1/R⁴: 12 dB per doubling of range', 'Range scales as the fourth root of power, RCS or integration', '12 dB more budget doubles the range; 40 dB gives ×10', 'Average power = peak power × duty cycle', 'Pulse energy = peak power × pulse width'],
+      levels: ['The R⁴ law and average power', 'How range scales with power and target size', 'Pulse energy and integrating pulses'],
+      types: {
+        r4: function () { var k = pick([1.5, 2, 3, 4, 10]), a = 40 * log10(k); return num('A target moves ' + k + ' times further away. The echo drops by?', a, 'dB', DB, 'Echo power goes as 1/R⁴: 40·log(' + k + ') = ' + f1(a) + ' dB.', [a / 2, a / 4]); },
+        duty: function () { var p = pick([1e3, 10e3, 100e3, 1e6]), d = pick([[0.001, '0.1 %'], [0.01, '1 %'], [0.02, '2 %'], [0.1, '10 %']]), s = si(p * d[0], 'W'); return num('Peak power ' + qty(p, 'W') + ' at ' + d[1] + ' duty cycle. Average power?', s.v, s.u, R5, 'Average = peak × duty = ' + fmt(s.v) + ' ' + s.u + '.'); },
+        rng: lv(2, function () { var x = pick([3, 6, 12, 20, 40]), a = Math.pow(10, x / 40); return num(x + ' dB more transmit power multiplies detection range by?', a, '×', R8, 'Range goes as the fourth root: 10^(' + x + '/40) = ×' + fmt(a) + '. It takes 12 dB to double the range.', [calc.lin20(x), calc.lin10(x)]); }),
+        rcs: lv(2, function () { var x = pick([3, 6, 10, 20]), a = Math.pow(10, -x / 40); return num('A target\'s radar cross-section is ' + x + ' dB smaller. Detection range multiplies by?', a, '×', R5, '10^(−' + x + '/40) = ×' + fmt(a) + '. A 10 dB smaller target is still seen at 56 % of the range.', [calc.lin20(-x), calc.lin10(-x)]); }),
+        energy: lv(3, function () { var p = pick([[1e6, 1e-6], [100e3, 10e-6], [1e3, 100e-6], [10e3, 1e-6], [1e6, 100e-6], [50e3, 20e-6]]), s = si(p[0] * p[1], 'J'); return num('A ' + qty(p[0], 'W') + ' pulse lasting ' + qty(p[1], 's') + ': energy?', s.v, s.u, R5, 'E = P × τ = ' + fmt(s.v) + ' ' + s.u + '. Detection depends on energy, which is why long coded pulses work.'); }),
+        nint: lv(3, function () { var n = pick([4, 16, 100, 10000]), a = Math.pow(n, 0.25); return num('Coherently integrating ' + n + ' pulses multiplies detection range by?', a, '×', R8, 'SNR improves ×' + n + ', range by its fourth root: ×' + fmt(a) + '.', [Math.sqrt(n), n]); })
+      }
+    },
+    {
+      id: 'pa', name: 'Phased arrays', group: 'RF', blurb: 'Steering phase, grating lobes, scan loss.', parents: ['ant'],
+      anchors: ['Phase step per element = 360° × (d/λ) × sin θ', 'λ/2 spacing steered to 30° needs 90° per element', 'No grating lobes if d ≤ λ / (1 + sin θ_max)', 'Off broadside the beam widens by 1/cos θ and gain drops by cos θ', 'An n-bit phase shifter steps 360°/2ⁿ'],
+      levels: ['Steering phase and phase-shifter steps', 'Grating-lobe spacing and beam broadening', 'Scan loss and array size for a beamwidth'],
+      types: {
+        step: function () { var p = pick([[0.5, 30], [0.5, 90], [0.5, 45], [0.5, 60], [0.25, 30], [0.25, 90]]), a = 360 * p[0] * Math.sin(p[1] * PI / 180); return num('Element spacing ' + p[0] + ' λ, beam steered ' + p[1] + '° off broadside. Phase step between elements?', a, '°', { abs: 2 }, '360° × ' + p[0] + ' × sin ' + p[1] + '° = ' + f1(a) + '°.', [a * 2, a / 2, 360 * p[0]]); },
+        bits: function () { var n = pick([3, 4, 5, 6]); return num('Smallest phase step of a ' + n + '-bit phase shifter?', 360 / Math.pow(2, n), '°', { rel: 0.03 }, '360° / 2^' + n + ' = ' + fmt(360 / Math.pow(2, n), 4) + '°.'); },
+        grate: lv(2, function () { var t = pick([30, 45, 60, 90]), a = 1 / (1 + Math.sin(t * PI / 180)); return num('Largest element spacing with no grating lobes when scanning to ±' + t + '°?', a, 'λ', { abs: 0.02 }, 'd ≤ λ / (1 + sin θ_max) = 1 / ' + f2(1 + Math.sin(t * PI / 180)) + ' = ' + f2(a) + ' λ. Scanning to the horizon needs λ/2.', null, { pos: true }); }),
+        broad: lv(2, function () { var t = pick([30, 45, 60]), a = 1 / Math.cos(t * PI / 180); return num('Steering ' + t + '° off broadside widens the beam by what factor?', a, '×', R5, '1 / cos ' + t + '° = ×' + fmt(a) + '. The array looks shorter from the side.'); }),
+        scan: lv(3, function () { var t = pick([30, 45, 60]), a = -calc.db10(Math.cos(t * PI / 180)); return num('Scan loss at ' + t + '° off broadside (cos θ law)?', a, 'dB', { abs: 0.25 }, '−10·log(cos ' + t + '°) = ' + f1(a) + ' dB.', null, { pos: true }); }),
+        elems: lv(3, function () { var b = pick([1, 2, 5, 10]); return num('About how many λ/2-spaced elements for a ' + b + '° broadside beam?', Math.round(101.6 / b), 'elements', R10, 'θ ≈ 102° / N, so N ≈ 102 / ' + b + ' ≈ ' + Math.round(101.6 / b) + '.'); })
+      }
+    },
+    {
+      id: 'lc', name: 'LC parts at 50 Ω', group: 'Circuits', blurb: 'Component values for a given reactance, filter order, ring-down.', parents: ['react', 'ckt'],
+      anchors: ['For 50 Ω of reactance: L = 7.96 µH / f(MHz), C = 3183 pF / f(MHz)', 'At 100 MHz that is 79.6 nH and 31.8 pF', 'Each filter order gives 6 dB per octave, 20 dB per decade', 'Loaded Q = centre frequency / bandwidth', 'Ring-down time constant τ = Q / (π·f₀)'],
+      levels: ['L and C for 50 Ω of reactance', 'Other impedances and filter order', 'Loaded Q and ring-down time'],
+      types: {
+        l50: function () { var f = pick([1, 2, 5]) * Math.pow(10, ri(6, 9)), s = si(50 / (2 * PI * f), 'H'); return num('Inductance with 50 Ω of reactance at ' + qty(f, 'Hz') + '?', s.v, s.u, R8, 'L = X/(2πf) = 7.96 µH / f(MHz) = ' + fmt(s.v) + ' ' + s.u + '.'); },
+        c50: function () { var f = pick([1, 2, 5]) * Math.pow(10, ri(6, 9)), s = si(1 / (2 * PI * f * 50), 'F'); return num('Capacitance with 50 Ω of reactance at ' + qty(f, 'Hz') + '?', s.v, s.u, R8, 'C = 1/(2πfX) = 3183 pF / f(MHz) = ' + fmt(s.v) + ' ' + s.u + '.'); },
+        lz: lv(2, function () { var z = pick([25, 75, 100, 200]), f = pick([1e6, 10e6, 100e6, 1e9]), isL = rnd() < 0.5, s = isL ? si(z / (2 * PI * f), 'H') : si(1 / (2 * PI * f * z), 'F'); return num((isL ? 'Inductance' : 'Capacitance') + ' with ' + z + ' Ω of reactance at ' + qty(f, 'Hz') + '?', s.v, s.u, R8, 'Scale the 50 Ω value: ' + (isL ? 'L goes up with X' : 'C goes down as X goes up') + '. Result ' + fmt(s.v) + ' ' + s.u + '.'); }),
+        ord: lv(2, function () { if (rnd() < 0.5) { var a = pick([18, 24, 30, 40, 60]); return num('You need ' + a + ' dB of rejection one octave above cutoff. Minimum filter order (6 dB per octave per order)?', Math.ceil(a / 6), '', INT, a + ' / 6 = ' + fmt(a / 6) + ', so order ' + Math.ceil(a / 6) + '.'); } var d = pick([40, 60, 80, 100]); return num('You need ' + d + ' dB of rejection one decade above cutoff. Minimum filter order?', d / 20, '', INT, 'Each order gives 20 dB per decade: ' + d + ' / 20 = ' + (d / 20) + '.'); }),
+        qbw: lv(3, function () { var p = pick([[10.7e6, 200e3], [455e3, 10e3], [1090e6, 20e6], [145e6, 1e6], [7e6, 3e3]]); return num('A filter centred on ' + qty(p[0], 'Hz') + ' with ' + qty(p[1], 'Hz') + ' bandwidth: loaded Q?', p[0] / p[1], '', R5, 'Q = f₀ / BW = ' + fmt(p[0] / p[1], 4) + '.'); }),
+        ring: lv(3, function () { var p = pick([[100, 10e6], [10000, 10e6], [50, 455e3], [1000, 1e9], [200, 100e6]]), s = si(p[0] / (PI * p[1]), 's'); return num('A resonator at ' + qty(p[1], 'Hz') + ' with Q = ' + p[0] + ': ring-down time constant?', s.v, s.u, R8, 'τ = Q / (π·f₀) = ' + fmt(s.v) + ' ' + s.u + '. High Q means narrow and slow.'); })
+      }
+    },
+    {
+      id: 'plan', name: 'Frequency planning', group: 'DSP', blurb: 'LO, IF, image frequencies and ADC spurs.', parents: ['sdr', 'alias'],
+      anchors: ['A mixer gives the sum and the difference of RF and LO', 'High-side LO = RF + IF; low-side LO = RF − IF', 'The image sits 2 × IF from the wanted signal, on the far side of the LO', 'A higher IF pushes the image further away', 'ADC harmonics alias like any other tone'],
+      levels: ['LO frequency and mixer products', 'Image frequency and choosing an IF', 'Aliased harmonics and the half-IF spur'],
+      types: {
+        lo: function () { var rf = pick([100, 145, 435, 1090]), f = pick([10.7, 21.4, 45, 70]), hi = rnd() < 0.5; return num('RF ' + rf + ' MHz, IF ' + f + ' MHz, ' + (hi ? 'high' : 'low') + '-side injection. LO frequency?', hi ? rf + f : rf - f, 'MHz', { abs: 0.05 }, (hi ? 'High-side: LO = RF + IF' : 'Low-side: LO = RF − IF') + ' = ' + fmt(hi ? rf + f : rf - f, 6) + ' MHz.', [hi ? rf - f : rf + f, rf, hi ? rf + 2 * f : rf - 2 * f]); },
+        mix: function () { var p = pick([[1090, 1020], [435, 390], [145, 134.3], [2400, 2330], [100, 110.7]]), sum = rnd() < 0.5; return num('Mixing ' + p[0] + ' MHz with ' + p[1] + ' MHz: the ' + (sum ? 'sum' : 'difference') + ' product?', sum ? p[0] + p[1] : Math.abs(p[0] - p[1]), 'MHz', { abs: 0.05 }, 'Sum ' + fmt(p[0] + p[1], 6) + ' MHz, difference ' + fmt(Math.abs(p[0] - p[1]), 6) + ' MHz.', [sum ? Math.abs(p[0] - p[1]) : p[0] + p[1], p[0], p[1]]); },
+        img: lv(2, function () { var rf = pick([100, 145, 435, 1090]), f = pick([10.7, 21.4, 45, 70]), hi = rnd() < 0.5, a = hi ? rf + 2 * f : rf - 2 * f; return num('RF ' + rf + ' MHz, IF ' + f + ' MHz, ' + (hi ? 'high' : 'low') + '-side LO. Image frequency?', a, 'MHz', { abs: 0.05 }, 'The image is 2 × IF away on the LO side: ' + rf + (hi ? ' + ' : ' − ') + fmt(2 * f, 4) + ' = ' + fmt(a, 6) + ' MHz.', [hi ? rf - 2 * f : rf + 2 * f, hi ? rf + f : rf - f, rf]); }),
+        ifsel: lv(2, function () { var x = pick([20, 42.8, 90, 140]); return num('The preselector only rejects signals at least ' + x + ' MHz away. Minimum IF to protect against the image?', x / 2, 'MHz', { rel: 0.03 }, 'The image is 2 × IF away, so IF ≥ ' + x + ' / 2 = ' + fmt(x / 2, 4) + ' MHz.', [x, x * 2]); }),
+        harm: lv(3, function () { var p = pick([[30, 100, 3], [30, 100, 2], [70, 250, 3], [40, 100, 2], [45, 100, 3], [12, 50, 3], [20, 65, 3]]), a = calc.alias(p[0] * p[2], p[1]); return num('A ' + p[0] + ' MHz input sampled at ' + p[1] + ' MS/s. Where does its ' + (p[2] === 2 ? '2nd' : '3rd') + ' harmonic land?', a, 'MHz', { rel: 0.03 }, 'The harmonic is at ' + (p[0] * p[2]) + ' MHz. Fold it against ' + p[1] + ' MS/s: ' + fmt(a) + ' MHz.', [p[0] * p[2], p[1] / 2 - a]); }),
+        halfif: lv(3, function () { var rf = pick([145, 435, 1090]), f = pick([21.4, 45, 70]); return num('RF ' + rf + ' MHz, IF ' + f + ' MHz, high-side LO. Frequency of the half-IF spur?', rf + f / 2, 'MHz', { abs: 0.05 }, 'It sits halfway between RF and LO: ' + rf + ' + ' + fmt(f / 2, 4) + ' = ' + fmt(rf + f / 2, 6) + ' MHz.', [rf - f / 2, rf + f, rf + 2 * f]); })
+      }
+    },
+    {
+      id: 'stft', name: 'Spectrograms', group: 'DSP', blurb: 'Window length, hop, frames, time against frequency.', parents: ['fft', 'win'],
+      anchors: ['Time resolution = window length / fs', 'Frequency resolution = fs / window length; the two multiply to 1', 'Hop = window × (1 − overlap)', 'Frames = (samples − window) / hop + 1', 'Frame rate = fs / hop'],
+      levels: ['Time resolution and hop size', 'Frame counts and the time-frequency trade', 'Frame rate and how much time a display covers'],
+      types: {
+        tr: function () { var p = pick([[1024, 1.024e6], [256, 2.4e6], [4096, 48e3], [1024, 48e3], [64, 2e6], [2048, 2.048e6]]), s = si(p[0] / p[1], 's'); return num('A ' + p[0] + '-sample window at ' + qty(p[1], 'S/s') + ': time resolution?', s.v, s.u, R5, 'Window length / fs = ' + fmt(s.v) + ' ' + s.u + '. Anything shorter is smeared across the frame.'); },
+        hop: function () { var n = pick([256, 512, 1024, 4096]), o = pick([[0.5, '50 %'], [0.75, '75 %'], [0.25, '25 %']]); return num('Window of ' + n + ' samples with ' + o[1] + ' overlap: hop size?', n * (1 - o[0]), 'samples', INT, 'Hop = window × (1 − overlap) = ' + (n * (1 - o[0])) + ' samples.', [n * o[0], n]); },
+        frames: lv(2, function () { var n = pick([512, 1024]), hop = n / pick([1, 2, 4]), k = pick([10, 59, 100, 1000]), tot = n + hop * (k - 1); return num(tot + ' samples, window ' + n + ', hop ' + hop + ': how many full frames?', k, 'frames', INT, '(samples − window) / hop + 1 = (' + tot + ' − ' + n + ') / ' + hop + ' + 1 = ' + k + '.', [Math.round(tot / n), Math.round(tot / hop), k - 1]); }),
+        trade: lv(2, function () { var p = pick([[0.5e-6, 'a 0.5 µs pulse'], [120e-6, 'a 120 µs burst'], [1e-3, 'a 1 ms burst'], [10e-3, 'a 10 ms chirp segment']]), s = si(1 / p[0], 'Hz'); return num('To isolate ' + p[1] + ' the window can be no longer than it. Best frequency resolution you can then have?', s.v, s.u, R5, 'Resolution = 1 / window duration = ' + fmt(s.v) + ' ' + s.u + '. Sharper in time always means blurrier in frequency.'); }),
+        rate: lv(3, function () { var p = pick([[2.4e6, 1024], [48e3, 512], [1e6, 500], [2e6, 2048], [2.4e6, 2400]]); return num(qty(p[0], 'S/s') + ' with a hop of ' + p[1] + ' samples: frames per second?', p[0] / p[1], 'frames/s', R5, 'fs / hop = ' + fmt(p[0] / p[1], 4) + ' frames per second.'); }),
+        span: lv(3, function () { var p = pick([[1000, 1024, 2.048e6], [800, 512, 48e3], [500, 2400, 2.4e6], [1920, 1000, 1e6]]), s = si(p[0] * p[1] / p[2], 's'); return num('A waterfall ' + p[0] + ' columns wide, hop ' + p[1] + ' samples, at ' + qty(p[2], 'S/s') + ': how much time does it show?', s.v, s.u, R5, 'Columns × hop / fs = ' + fmt(s.v) + ' ' + s.u + '.'); })
+      }
+    },
+    {
+      id: 'corr', name: 'Correlation', group: 'DSP', blurb: 'Lags as delay and distance, correlation gain, code sidelobes.', parents: ['xform'],
+      anchors: ['Autocorrelation peaks at zero lag; the peak is the signal energy', 'A cross-correlation peak at lag k means a delay of k / fs', 'One sample at 2.4 MS/s is 125 m of path', 'Correlating N samples gives 10·log(N) of gain', 'Delay resolution ≈ 1 / bandwidth'],
+      levels: ['Lag as time, and what correlation shows', 'Lag as distance, and correlation gain', 'Code sidelobes and delay resolution'],
+      types: {
+        lag: function () { var p = pick([[48, 48e3], [100, 1e6], [24, 2.4e6], [5, 10e6], [960, 48e3]]), s = si(p[0] / p[1], 's'); return num('Cross-correlation peaks at lag ' + p[0] + ' with data at ' + qty(p[1], 'S/s') + '. Delay between the signals?', s.v, s.u, R5, 'Delay = lag / fs = ' + fmt(s.v) + ' ' + s.u + '.'); },
+        facts: function () { return item([
+          ['The autocorrelation of any signal is largest at', 'Zero lag', ['Half its length', 'Its last sample', 'It depends on the signal'], 'A signal matches itself best with no shift; the peak value is its energy.'],
+          ['The autocorrelation of white noise is', 'A single spike at zero lag', ['Flat at all lags', 'A sine wave', 'A slow decay'], 'White noise is unrelated to any shifted copy of itself.'],
+          ['The Fourier transform of an autocorrelation is the', 'Power spectrum', ['Phase spectrum', 'Impulse response', 'Signal itself'], 'Wiener–Khinchin: autocorrelation and power spectral density are a transform pair.'],
+          ['Correlation is the same as convolution with', 'A time-reversed, conjugated copy', ['The same signal', 'A delayed copy', 'A window'], 'That is exactly what a matched filter does.'],
+          ['The autocorrelation of a periodic signal is', 'Periodic with the same period', ['A single spike', 'Zero', 'A ramp'], 'It matches itself again every whole period, which is how pitch and symbol rates are found.']]); },
+        dist: lv(2, function () { var p = pick([[10, 10e6], [1, 2.4e6], [24, 2.4e6], [5, 20e6], [100, 1e6]]), u = lenU(3e8 * p[0] / p[1]); return num('Two receivers see the same radio signal ' + p[0] + ' sample' + (p[0] > 1 ? 's' : '') + ' apart at ' + qty(p[1], 'S/s') + '. Path difference?', u.v, u.u, R5, 'c × lag / fs = 300 m per µs × ' + qty(p[0] / p[1], 's') + ' = ' + fmt(u.v) + ' ' + u.u + '.'); }),
+        gain: lv(2, function () { var n = pick([13, 100, 1000, 1023, 8192]); return num('Correlating against a known ' + n + '-sample sequence: gain over the noise?', calc.db10(n), 'dB', DB, '10·log(' + n + ') = ' + f1(calc.db10(n)) + ' dB.', [calc.db20(n)]); }),
+        psl: lv(3, function () { var n = pick([7, 11, 13]); return num('Barker-' + n + ' code: peak sidelobe relative to the main peak?', -calc.db20(n), 'dB', DB, 'Peak ' + n + ', sidelobes 1: −20·log(' + n + ') = ' + f1(-calc.db20(n)) + ' dB.', [-calc.db10(n)]); }),
+        res: lv(3, function () { var b = pick([1e6, 2e6, 10e6, 20e6, 240e6]), u = lenU(3e8 / b); return num('A signal ' + qty(b, 'Hz') + ' wide: delay resolution, expressed as one-way distance?', u.v, u.u, R5, 'Delay resolution ≈ 1/B = ' + qty(1 / b, 's') + ', which light covers in ' + fmt(u.v) + ' ' + u.u + '.', [u.v / 2]); })
+      }
+    },
+    {
+      id: 'imp', name: 'IQ impairments', group: 'DSP', blurb: 'DC offset, imbalance, image rejection, phase noise.', parents: ['iq'],
+      anchors: ['DC offset and LO leakage: a spike at the centre', 'IQ imbalance: a mirror image at −f', 'Image rejection ≈ 20·log(2/ε): 1 % gain error → 46 dB, 10 % → 26 dB', 'Phase error in radians works the same way: 1° → 41 dB', 'RMS phase noise of φ radians gives EVM ≈ φ: 1° → 1.75 %'],
+      levels: ['Recognising each impairment', 'Image rejection from gain and phase error', 'Image level and EVM from phase noise'],
+      types: {
+        where: function () { var o = ['A spike at the centre frequency', 'A mirror image on the other side of centre', 'A slowly spinning constellation', 'Constellation points smeared along arcs', 'Outer constellation points pulled inward'];
+          return item([['A DC offset on I or Q shows up as', o[0], o, 'A constant added to the samples is energy at 0 Hz, the centre of the IQ spectrum.'], ['Gain mismatch between I and Q shows up as', o[1], o, 'Imbalance leaks some of +f into −f.'],
+            ['A small frequency offset shows up as', o[2], o, 'A constant phase advance per sample rotates everything steadily.'], ['Phase noise shows up as', o[3], o, 'Random phase jitter moves points around the circle, not in and out.'],
+            ['Amplifier compression shows up as', o[4], o, 'The largest amplitudes get less gain than the small ones.']]); },
+        irrg: lv(2, function () { var e = pick([1, 2, 5, 10]), a = calc.db20(200 / e); return num('I/Q gain mismatch of ' + e + ' %: image rejection?', a, 'dB', DB, '20·log(2 / ' + (e / 100) + ') = ' + f1(a) + ' dB.', [calc.db20(100 / e), calc.db10(200 / e)]); }),
+        irrp: lv(2, function () { var d = pick([0.5, 1, 2, 5]), a = calc.db20(2 / (d * PI / 180)); return num('I/Q phase error of ' + d + '°: image rejection?', a, 'dB', DB, d + '° = ' + fmt(d * PI / 180) + ' rad; 20·log(2 / that) = ' + f1(a) + ' dB. Anchor: 1° gives 41 dB.'); }),
+        imgl: lv(3, function () { var t = pick([-10, -20, -30]), r = pick([25, 30, 40, 46]); return num('A tone at ' + sg(t) + ' dBm with ' + r + ' dB of image rejection. Level of its image?', t - r, 'dBm', DB, 'The image is the tone minus the rejection: ' + sg(t) + ' − ' + r + ' = ' + sg(t - r) + ' dBm, at the mirror frequency.', [t + r]); }),
+        pn: lv(3, function () { var d = pick([0.5, 1, 2, 3]); return num('RMS phase noise of ' + d + '°: the EVM it causes?', 100 * d * PI / 180, '%', R8, 'EVM ≈ phase error in radians = ' + fmt(d * PI / 180) + ' → ' + fmt(100 * d * PI / 180) + ' %.'); })
+      }
+    },
+    {
+      id: 'rs', name: 'Resampling', group: 'DSP', blurb: 'Interpolation images, rational rate changes, filter cutoffs.', parents: ['filt', 'dfreq'],
+      anchors: ['Interpolate by L: insert zeros, then low-pass at the old Nyquist', 'Decimate by M: low-pass at the new Nyquist, then drop samples', 'Rational change: new rate = fs × L / M', '48 kHz → 44.1 kHz is 147/160', 'The filter cutoff is the lower of the two Nyquist frequencies'],
+      levels: ['Interpolated rates and where images appear', 'Rational rate changes and the cutoff to use', 'Polyphase taps and staged decimation'],
+      types: {
+        up: function () { var p = pick([[48e3, 4], [1e6, 8], [2.4e6, 5], [8e3, 6], [44.1e3, 2]]), s = si(p[0] * p[1], 'S/s'); return num(qty(p[0], 'S/s') + ' interpolated by ' + p[1] + ': new rate?', s.v, s.u, { rel: 0.02 }, 'Multiply the rate by L: ' + fmt(s.v, 4) + ' ' + s.u + '.'); },
+        img: function () { var p = pick([[48e3, 1e3], [8e3, 1e3], [1e6, 100e3], [48e3, 10e3]]), s = si(p[0] - p[1], 'Hz'); return num('Zero-stuffing data that was at ' + qty(p[0], 'S/s') + '. Where is the first image of a ' + qty(p[1], 'Hz') + ' tone?', s.v, s.u, { rel: 0.02 }, 'Images sit around multiples of the old rate: ' + qty(p[0], 'Hz') + ' − ' + qty(p[1], 'Hz') + ' = ' + fmt(s.v) + ' ' + s.u + '. The interpolation filter removes them.', [(p[0] + p[1]) / ((p[0] - p[1]) / s.v), p[0] / ((p[0] - p[1]) / s.v)]); },
+        rat: lv(2, function () { var p = pick([[48e3, 147, 160], [44.1e3, 160, 147], [2.4e6, 5, 12], [1e6, 3, 2], [10e6, 1, 4], [2.4e6, 1, 50]]), s = si(p[0] * p[1] / p[2], 'S/s'); return num(qty(p[0], 'S/s') + ' resampled by ' + p[1] + '/' + p[2] + ': new rate?', s.v, s.u, { rel: 0.01 }, 'fs × L / M = ' + fmt(s.v, 4) + ' ' + s.u + '.'); }),
+        cut: lv(2, function () { var p = pick([[48e3, 44.1e3], [2.4e6, 1e6], [1e6, 1.5e6], [8e3, 48e3], [48e3, 8e3]]), s = si(Math.min(p[0], p[1]) / 2, 'Hz'); return num('Resampling ' + qty(p[0], 'S/s') + ' to ' + qty(p[1], 'S/s') + ': highest safe filter cutoff?', s.v, s.u, { rel: 0.02 }, 'Use the lower of the two Nyquist frequencies: ' + fmt(s.v, 4) + ' ' + s.u + '.', [Math.max(p[0], p[1]) / 2 / (Math.min(p[0], p[1]) / 2 / s.v)]); }),
+        poly: lv(3, function () { var p = pick([[96, 4], [240, 5], [1024, 8], [480, 160], [64, 2]]); return num('A ' + p[0] + '-tap interpolation filter split into ' + p[1] + ' polyphase branches: taps per branch?', p[0] / p[1], 'taps', INT, 'Taps / L = ' + (p[0] / p[1]) + '. Each output sample only needs one branch.', [p[0], p[0] * p[1]]); }),
+        stage: lv(3, function () { var p = pick([[2.4e6, 25, 4], [2.4e6, 10, 5], [10e6, 5, 8], [1e6, 4, 5], [20e6, 8, 5]]), s = si(p[0] / p[1], 'S/s'); return num('Decimating ' + qty(p[0], 'S/s') + ' by ' + (p[1] * p[2]) + ' in two stages, ' + p[1] + ' then ' + p[2] + '. Rate between the stages?', s.v, s.u, { rel: 0.02 }, qty(p[0], 'S/s') + ' / ' + p[1] + ' = ' + fmt(s.v, 4) + ' ' + s.u + '. The sharp filter then runs at the low rate, which is why staging is cheaper.', [p[0] / p[2] / (p[0] / p[1] / s.v), p[0] / (p[1] * p[2]) / (p[0] / p[1] / s.v)]); })
+      }
+    },
+    {
+      id: 'ber', name: 'Coding & error rates', group: 'DSP', blurb: 'Error counts, code rate, correction power, coding gain.', parents: ['mod'],
+      anchors: ['Errors per second = BER × bit rate', 'Code rate = k / n; bandwidth grows by 1 / rate', 'Distance d corrects ⌊(d − 1)/2⌋ errors and detects d − 1', 'Hamming codes: n = 2^m − 1, k = n − m', 'Uncoded BPSK or QPSK needs Eb/N0 ≈ 9.6 dB for BER 10⁻⁵; the Shannon limit is −1.6 dB'],
+      levels: ['Error counts and code rate', 'Correction power, Hamming codes, bandwidth cost', 'Eb/N0 anchors and coding gain'],
+      types: {
+        errs: function () { var p = pick([[1e-6, 1e6, '10⁻⁶'], [1e-5, 100e3, '10⁻⁵'], [1e-9, 1e9, '10⁻⁹'], [1e-6, 10e6, '10⁻⁶'], [1e-3, 9600, '10⁻³'], [1e-5, 1e6, '10⁻⁵']]); return num('BER ' + p[2] + ' at ' + qty(p[1], 'b/s') + ': errors per second?', p[0] * p[1], 'errors/s', R5, 'BER × bit rate = ' + fmt(p[0] * p[1]) + ' per second.'); },
+        cr: function () { var p = pick([[7, 4], [255, 223], [15, 11], [24, 12], [31, 26]]); return num('Code rate of an (' + p[0] + ', ' + p[1] + ') block code?', p[1] / p[0], '', { abs: 0.01 }, 'Rate = k / n = ' + p[1] + ' / ' + p[0] + ' = ' + fmt(p[1] / p[0]) + '.', [p[0] / p[1] - 1, 1 - p[1] / p[0]], { pos: true }); },
+        tcor: lv(2, function () { var d = pick([3, 5, 7, 9, 17, 33]); return rnd() < 0.5 ? num('A code with minimum distance ' + d + ' can correct how many errors?', Math.floor((d - 1) / 2), '', INT, '⌊(d − 1)/2⌋ = ' + Math.floor((d - 1) / 2) + '.', [d - 1, d]) : num('A code with minimum distance ' + d + ' can detect how many errors?', d - 1, '', INT, 'd − 1 = ' + (d - 1) + '.', [Math.floor((d - 1) / 2), d]); }),
+        ham: lv(2, function () { var m = pick([3, 4, 5, 6]), n = Math.pow(2, m) - 1; return rnd() < 0.5 ? num('Hamming code with ' + m + ' parity bits: block length n?', n, 'bits', INT, 'n = 2^' + m + ' − 1 = ' + n + '.', [n + 1, n - m]) : num('Hamming code with ' + m + ' parity bits: data bits k?', n - m, 'bits', INT, 'n = ' + n + ', k = n − m = ' + (n - m) + '.', [n, n + 1]); }),
+        bwx: lv(2, function () { var p = pick([[1 / 2, '1/2'], [2 / 3, '2/3'], [3 / 4, '3/4'], [7 / 8, '7/8']]); return num('For the same information rate, a rate-' + p[1] + ' code multiplies the occupied bandwidth by?', 1 / p[0], '×', R5, '1 / rate = ×' + fmt(1 / p[0]) + '.', [p[0]]); }),
+        ebno: lv(3, function () { var o = ['−1.6 dB', '6.8 dB', '9.6 dB', '10.5 dB', '12.6 dB'];
+          return item([['Eb/N0 for uncoded BPSK at BER 10⁻⁵', '9.6 dB', o, 'Anchors for uncoded BPSK and QPSK: 6.8 dB for 10⁻³, 9.6 dB for 10⁻⁵, 10.5 dB for 10⁻⁶.'], ['Eb/N0 for uncoded BPSK at BER 10⁻³', '6.8 dB', o, 'Anchors for uncoded BPSK and QPSK: 6.8 dB for 10⁻³, 9.6 dB for 10⁻⁵, 10.5 dB for 10⁻⁶.'],
+            ['Eb/N0 for uncoded QPSK at BER 10⁻⁶', '10.5 dB', o, 'QPSK needs the same Eb/N0 as BPSK: 10.5 dB for 10⁻⁶.'], ['The lowest Eb/N0 at which any code can work (Shannon limit)', '−1.6 dB', o, 'As the code rate goes to zero the limit is ln 2, which is −1.59 dB.'],
+            ['Compared with BPSK at the same Eb/N0, the BER of QPSK is', 'The same', ['Twice as bad', '3 dB worse', 'Half'], 'QPSK is two BPSK signals in quadrature, so it carries twice the bits for the same Eb/N0.']]); }),
+        cg: lv(3, function () { var x = pick([1, 2, 4.5, 6.5]); return num('A code reaches BER 10⁻⁵ at Eb/N0 = ' + x + ' dB. Coding gain over uncoded BPSK?', 9.6 - x, 'dB', DB, 'Uncoded BPSK needs 9.6 dB, so the gain is 9.6 − ' + x + ' = ' + f1(9.6 - x) + ' dB.', [9.6 + x], { pos: true }); })
+      }
+    },
+    {
+      id: 'fx', name: 'Fixed-point arithmetic', group: 'DSP', blurb: 'Formats after multiplying, shifts, overflow, guard bits.', parents: ['quant'],
+      anchors: ['Multiplying adds the fractional bits: Q1.15 × Q1.15 = Q2.30', 'Shift right by 15 to return to Q1.15', 'Shifts are powers of two: >> 3 divides by 8', 'Wrap-around flips the sign; saturate instead', 'Summing K values needs log₂(K) guard bits'],
+      levels: ['Product formats and shifts', 'Overflow, saturation and guard bits', 'Q1.15 products and coefficient word length'],
+      types: {
+        mulf: function () { var p = pick([['Q1.15', 'Q1.15', 30], ['Q1.7', 'Q1.7', 14], ['Q1.15', 'Q1.31', 46], ['Q8.8', 'Q8.8', 16], ['Q4.12', 'Q1.15', 27]]); return num(p[0] + ' × ' + p[1] + ': fractional bits in the full product?', p[2], 'bits', INT, 'Fractional bits add: ' + p[2] + '. So do the integer bits.', [p[2] / 2, p[2] + 1]); },
+        shift: function () { var p = pick([['Shifting right by 3 divides by', 8], ['Shifting left by 5 multiplies by', 32], ['Dividing by 16 is a right shift by how many bits', 4], ['Multiplying by 1024 is a left shift by how many bits', 10], ['Shifting right by 8 divides by', 256]]); return num(p[0] + '?', p[1], '', INT, 'Each bit of shift is a factor of two: ' + p[1] + '.', [p[1] * 2, p[1] / 2]); },
+        wrap: lv(2, function () { var p = pick([[30000, 10000], [20000, 20000], [32767, 1], [-30000, -10000]]), sum = p[0] + p[1], sat = rnd() < 0.5, a = sat ? Math.max(-32768, Math.min(32767, sum)) : ((sum + 32768) % 65536 + 65536) % 65536 - 32768; return num('16-bit signed: ' + fixed(p[0], 0) + ' + ' + fixed(p[1], 0) + ' with ' + (sat ? 'saturation' : 'wrap-around') + ' gives?', a, '', INT, 'The true sum ' + fixed(sum, 0) + ' does not fit in −32768…32767. ' + (sat ? 'Saturation clamps it to ' : 'Wrap-around subtracts or adds 65536: ') + fixed(a, 0) + '.', [sum, -a, sat ? sum - 65536 : 32767], { neg: true }); }),
+        guard: lv(2, function () { var k = pick([8, 100, 256, 1024, 5]); return num('Accumulating ' + k + ' full-scale values without overflow: guard bits needed?', Math.ceil(Math.log2(k)), 'bits', INT, '⌈log₂(' + k + ')⌉ = ' + Math.ceil(Math.log2(k)) + ' bits.', [k, Math.ceil(Math.log2(k)) * 2]); }),
+        q15m: lv(3, function () { var p = pick([[0.5, 0.5], [0.5, 0.25], [-0.5, 0.5], [0.25, 0.25], [0.5, -0.125]]), a = p[0] * p[1] * 32768; return num('Q1.15: ' + fmt(p[0]) + ' × ' + fmt(p[1]) + ', after shifting the product right by 15. Stored integer?', a, '', INT, 'The value is ' + fmt(p[0] * p[1], 5) + '; times 32768 = ' + fixed(a, 0) + '.', [a * 2, -a, a / 2], { neg: true }); }),
+        coef: lv(3, function () { var a = pick([48, 60, 72, 96]); return num('Filter coefficients for about ' + a + ' dB of stopband: roughly how many bits (6 dB per bit)?', Math.round(a / 6.02), 'bits', INT, 'About 6 dB per bit: ' + a + ' / 6 ≈ ' + Math.round(a / 6.02) + ' bits, plus a couple to be safe.', null, { pos: true }); })
+      }
+    }
+  );
+
+  /* ---------- level 2 and 3 content: harder question types that unlock as a chapter levels up ---------- */
+  var EXTRA = {
+    db: {
+      sum: lv(2, function () {
+        var t, a, b, c;
+        do { a = pick([3, 6, 10, 13, 20, -3, -6, -10, 7, -7]); b = pick([3, 6, 10, -3, -6, -10, 7]); c = pick([3, 6, 10, -3, -6, 20, -20]); t = a + b + c; } while (t < -20 || t > 30);
+        return num(sg(a) + ' dB, then ' + sg(b) + ' dB, then ' + sg(c) + ' dB. Overall power ratio?', calc.lin10(t), '×', R8, 'Add the dB first: ' + sg(t) + ' dB. Then convert: ×' + fmt(calc.lin10(t)) + '.', [calc.lin20(t)]);
+      }),
+      odd: lv(2, function () {
+        if (rnd() < 0.5) { var r = pick([3, 6, 7, 15, 30, 60, 300, 1.5, 0.3]), a = calc.db10(r); return num('Power ratio ×' + fmt(r) + ' in dB?', a, 'dB', DB, '×3 ≈ 4.8 dB and ×7 ≈ 8.5 dB are worth knowing; the rest build from them. ×' + fmt(r) + ' = ' + f1(a) + ' dB.', [calc.db20(r)]); }
+        var d = pick([1, 2, 4, 5, 8, 11, 15, -1, -2, -5]);
+        return num(sg(d) + ' dB as a power ratio?', calc.lin10(d), '×', R8, '1 dB ≈ ×1.26, 2 dB ≈ ×1.6, 4 dB ≈ ×2.5, 5 dB ≈ ×3.16, 8 dB ≈ ×6.3. ' + sg(d) + ' dB = ×' + fmt(calc.lin10(d)) + '.', [calc.lin20(d)]);
+      }),
+      addp: lv(3, function () {
+        var a = pick([-30, -20, -10, 0, 10]), b = a - pick([0, 0, 3, 6, 10]), t = calc.db10(calc.lin10(a) + calc.lin10(b));
+        return num('Two uncorrelated signals, ' + sg(a) + ' dBm and ' + sg(b) + ' dBm, add together. Total power?', t, 'dBm', DB, 'Add the watts, not the dB. Equal powers give +3 dB; a signal 3 dB lower adds 1.8 dB, 6 dB lower about 1 dB, 10 dB lower about 0.4 dB. Total: ' + f1(t) + ' dBm.', [a + b, a + 6, a + 10]);
+      }),
+      pct: lv(3, function () {
+        var x = pick([0.1, 0.5, 1, 2, 3, 6, 10, 20]);
+        return num('A loss of ' + x + ' dB leaves what percentage of the power?', 100 * calc.lin10(-x), '%', R5, '10^(−' + x + '/10) = ' + fmt(calc.lin10(-x)) + ', so ' + fmt(100 * calc.lin10(-x)) + ' % gets through. 1 dB costs about 20 %, 0.5 dB about 11 %.');
+      })
+    },
+    dbm: {
+      v2dbm: lv(2, function () {
+        var p = pick([[1, '1 V'], [0.1, '100 mV'], [0.01, '10 mV'], [1e-3, '1 mV'], [1e-6, '1 µV'], [0.5e-6, '0.5 µV'], [10e-6, '10 µV'], [2, '2 V'], [0.224, '224 mV']]), a = calc.dbm(p[0] * p[0] / 50);
+        return num(p[1] + ' RMS across 50 Ω in dBm?', a, 'dBm', DB, '1 V RMS is +13 dBm and 1 µV is −107 dBm. Every ×10 in voltage is 20 dB. ' + p[1] + ' = ' + f1(a) + ' dBm.', [a + 10, a - 10]);
+      }),
+      dbuv: lv(3, function () {
+        if (rnd() < 0.5) { var x = pick([0, 20, 30, 40, 60, 87, 107]); return num(x + ' dBµV in a 50 Ω system, in dBm?', x - 107, 'dBm', DB, '0 dBµV is 1 µV, which into 50 Ω is −107 dBm. So dBm = dBµV − 107.', [x + 107, x - 90]); }
+        var d = pick([-107, -100, -87, -47, -7, 0]);
+        return num(sg(d) + ' dBm in a 50 Ω system, in dBµV?', d + 107, 'dBµV', DB, 'dBµV = dBm + 107, because 1 µV into 50 Ω is −107 dBm.', [d - 107, d + 90]);
+      }),
+      psd: lv(3, function () {
+        var p = pick([-30, -10, 0, 10, 20, 30]), b = pick([1e3, 1e4, 1e5, 1e6, 1e7, 2e7]), a = p - calc.db10(b);
+        return num(sg(p) + ' dBm spread evenly over ' + qty(b, 'Hz') + ': power density?', a, 'dBm/Hz', DB, 'Subtract 10·log(bandwidth): ' + sg(p) + ' − ' + f1(calc.db10(b)) + ' = ' + f1(a) + ' dBm/Hz.', [p + calc.db10(b)]);
+      })
+    },
+    chain: {
+      split: lv(2, function () {
+        var n = pick([2, 3, 4, 8, 16]);
+        return num('Ideal ' + n + '-way power splitter: loss to each output?', calc.db10(n), 'dB', DB, 'Each output gets 1/' + n + ' of the power: 10·log(' + n + ') = ' + f1(calc.db10(n)) + ' dB.', [calc.db20(n)]);
+      }),
+      ip3: lv(3, function () {
+        var po = pick([-20, -10, 0, 10]), d = pick([20, 25, 30, 40]), oip3 = po + d;
+        if (rnd() < 0.5) return num('Two tones at ' + sg(po) + ' dBm each leave an amplifier with OIP3 = ' + sg(oip3) + ' dBm. Level of the third-order products?', po - 2 * d, 'dBm', DB,
+          'They sit 2 × (OIP3 − P_out) = ' + (2 * d) + ' dB below the tones: ' + sg(po - 2 * d) + ' dBm. Each 1 dB of back-off buys 2 dB.', [po - d, po - 3 * d]);
+        return num('Two tones at ' + sg(po) + ' dBm each, OIP3 = ' + sg(oip3) + ' dBm. How far below the tones are the third-order products?', 2 * d, 'dBc', DB, 'Distance = 2 × (OIP3 − P_out) = 2 × ' + d + ' = ' + (2 * d) + ' dB.', [d, 3 * d]);
+      })
+    },
+    wave: {
+      eps: lv(2, function () {
+        var f = pick([145, 435, 1090, 2400, 5800, 10000]), e = pick([[2.1, 'PTFE (εr 2.1)'], [2.25, 'polyethylene (εr 2.25)'], [4, 'a dielectric with εr = 4'], [4.4, 'FR-4 (εr 4.4)'], [9, 'a dielectric with εr = 9']]), u = lenU(300 / f / Math.sqrt(e[0]));
+        return num('Wavelength at ' + qf(f) + ' inside ' + e[1] + '?', u.v, u.u, R5, 'Divide the free-space wavelength by √εr: ' + lenStr(300 / f) + ' / ' + fmt(Math.sqrt(e[0])) + ' = ' + fmt(u.v) + ' ' + u.u + '.', [u.v * Math.sqrt(e[0]), u.v / Math.sqrt(e[0])]);
+      }),
+      elen: lv(3, function () {
+        var l, f, vf, deg;
+        do { l = pick([0.05, 0.1, 0.25, 0.5, 1]); f = pick([75, 150, 300, 600]); vf = pick([1, 0.66]); deg = 360 * l / (300 / f * vf); } while (deg > 720 || deg < 5);
+        return num(lenStr(l) + ' of ' + (vf === 1 ? 'air line' : 'coax (velocity factor ' + vf + ')') + ' at ' + qf(f) + ': electrical length in degrees?', deg, '°', R5,
+          'Wavelength in the line is ' + lenStr(300 / f * vf) + '. ' + lenStr(l) + ' is ' + fmt(l / (300 / f * vf)) + ' wavelengths × 360° = ' + fmt(deg) + '°.');
+      })
+    },
+    match: {
+      z2g: lv(2, function () {
+        var r = pick([0, 10, 25, 75, 100, 150, 200, 450]), g = Math.abs(r - 50) / (r + 50);
+        return num('|Γ| for ' + (r === 0 ? 'a short circuit' : 'a ' + r + ' Ω load') + ' on a 50 Ω line?', g, '', { abs: 0.03 }, '|Γ| = |Z_L − Z₀| / (Z_L + Z₀) = ' + Math.abs(r - 50) + ' / ' + (r + 50) + ' = ' + f2(g) + '.', [1 - g, g / 2], { pos: true });
+      }),
+      qw: lv(3, function () {
+        var p = pick([[50, 100], [50, 200], [50, 75], [50, 12.5], [75, 300], [50, 450]]), z = Math.sqrt(p[0] * p[1]);
+        return num('Quarter-wave transformer between ' + p[0] + ' Ω and ' + p[1] + ' Ω: line impedance needed?', z, 'Ω', R5, 'Z = √(Z₁·Z₂) = √(' + fmt(p[0] * p[1], 5) + ') = ' + fmt(z) + ' Ω.', [(p[0] + p[1]) / 2]);
+      }),
+      lq: lv(3, function () {
+        var p = pick([[50, 100], [50, 250], [50, 500], [10, 50], [50, 1300]]), q = Math.sqrt(p[1] / p[0] - 1);
+        return num('L-match between ' + p[0] + ' Ω and ' + p[1] + ' Ω: loaded Q?', q, '', { rel: 0.06 }, 'Q = √(R_high/R_low − 1) = √(' + fmt(p[1] / p[0] - 1) + ') = ' + fmt(q) + '. A bigger impedance ratio means a narrower match.');
+      })
+    },
+    noise: {
+      nt: lv(2, function () {
+        if (rnd() < 0.5) { var nf = pick([0.5, 1, 2, 3, 6, 10]); return num('Noise figure ' + nf + ' dB as a noise temperature?', 290 * (calc.lin10(nf) - 1), 'K', R8, 'T = 290·(F − 1) = 290 × ' + fmt(calc.lin10(nf) - 1) + ' = ' + fmt(290 * (calc.lin10(nf) - 1)) + ' K. 1 dB ≈ 75 K, 3 dB ≈ 290 K.'); }
+        var t = pick([35, 75, 170, 290, 870]);
+        return num('Noise temperature ' + t + ' K as a noise figure?', calc.db10(1 + t / 290), 'dB', { abs: 0.3 }, 'F = 1 + T/290 = ' + fmt(1 + t / 290) + ' → ' + f1(calc.db10(1 + t / 290)) + ' dB.', null, { pos: true });
+      }),
+      att: lv(2, function () {
+        var loss = pick([1, 2, 3, 6, 10]), nf = pick([1, 2, 3, 5]);
+        return num(loss + ' dB of cable loss ahead of a receiver with NF ' + nf + ' dB. System noise figure?', loss + nf, 'dB', DB, 'Loss before the first amplifier adds dB for dB: ' + loss + ' + ' + nf + ' = ' + (loss + nf) + ' dB. That is why the LNA goes at the antenna.', [nf, loss], { pos: true });
+      }),
+      cn0: lv(3, function () {
+        var p = pick([-130, -125, -120, -110, -100]), nf = pick([1, 2, 3, 5]);
+        return num('Carrier ' + sg(p) + ' dBm, receiver NF ' + nf + ' dB. C/N₀?', p + 174 - nf, 'dB-Hz', DB, 'N₀ = −174 + ' + nf + ' = ' + sg(-174 + nf) + ' dBm/Hz. C/N₀ = ' + sg(p) + ' − (' + sg(-174 + nf) + ') = ' + (p + 174 - nf) + ' dB-Hz.', [p + 174 + nf]);
+      })
+    },
+    link: {
+      hor: lv(2, function () {
+        var h = pick([1, 2, 10, 30, 100, 1000, 10000]);
+        return num('Radio horizon for an antenna ' + fmt(h, 5) + ' m above flat ground?', 4.12 * Math.sqrt(h), 'km', R8, 'd(km) ≈ 4.12·√h(m) with standard refraction = 4.12 × ' + fmt(Math.sqrt(h)) + ' = ' + fmt(4.12 * Math.sqrt(h)) + ' km.');
+      }),
+      los: lv(3, function () {
+        var h1 = pick([2, 10, 30]), h2 = pick([1000, 3000, 10000]), d = 4.12 * (Math.sqrt(h1) + Math.sqrt(h2));
+        return num('Line-of-sight range between an antenna at ' + h1 + ' m and an aircraft at ' + h2 + ' m?', d, 'km', R8, 'Add the two horizons: 4.12 × (√' + h1 + ' + √' + h2 + ') = 4.12 × ' + fmt(Math.sqrt(h1) + Math.sqrt(h2)) + ' = ' + fmt(d) + ' km.');
+      }),
+      frz: lv(3, function () {
+        var p = pick([[10, 2.4], [1, 5.8], [50, 0.435], [20, 10], [5, 2.4], [100, 1.09]]), r = 8.66 * Math.sqrt(p[0] / p[1]);
+        return num('First Fresnel zone radius at mid-path: ' + p[0] + ' km link at ' + p[1] + ' GHz?', r, 'm', R8, 'r(m) ≈ 8.66·√(d(km)/f(GHz)) = 8.66 × ' + fmt(Math.sqrt(p[0] / p[1])) + ' = ' + fmt(r) + ' m. Keep about 60 % of it clear.');
+      }),
+      maxd: lv(3, function () {
+        var f = pick([145, 435, 1090, 2400]), PL = Math.round(calc.fspl(f, pick([5, 10, 20, 50, 100, 200, 400]))), x = PL - 32.45 - 20 * log10(f), d = Math.pow(10, x / 20);
+        return num('You can tolerate ' + PL + ' dB of path loss at ' + qf(f) + '. Maximum free-space distance?', d, 'km', { rel: 0.12 }, '20·log d = ' + PL + ' − 32.45 − ' + f1(20 * log10(f)) + ' = ' + f1(x) + ' dB → d ≈ ' + fmt(d) + ' km.');
+      })
+    },
+    time: {
+      v: lv(2, function () {
+        var v = pick([30, 100, 250, 1000, 7500]), f = pick([435e6, 1090e6, 2.4e9, 10e9]), fd = calc.doppler(v, f);
+        return num('A one-way Doppler shift of ' + qty(fd, 'Hz') + ' at ' + qty(f, 'Hz') + ': closing speed?', v, 'm/s', R8, 'v = f_d × λ = ' + qty(fd, 'Hz') + ' × ' + lenStr(3e8 / f) + ' = ' + fmt(v, 4) + ' m/s.');
+      }),
+      blind: lv(3, function () {
+        var b = pick([[0.03, '10 GHz'], [0.1, '3 GHz'], [0.23, '1.3 GHz']]), prf = pick([500, 1000, 2000, 10000]), v = b[0] * prf / 2;
+        return num('Radar at ' + b[1] + ' with a PRF of ' + qty(prf, 'Hz') + ': first blind speed?', v, 'm/s', R8, 'v = λ·PRF/2 = ' + lenStr(b[0]) + ' × ' + qty(prf, 'Hz') + ' / 2 = ' + fmt(v) + ' m/s. It is also the span of unambiguous velocity.', [v * 2]);
+      }),
+      vres: lv(3, function () {
+        var b = pick([[0.03, '10 GHz'], [0.1, '3 GHz'], [0.23, '1.3 GHz']]), T = pick([1e-3, 10e-3, 50e-3, 0.1]), v = b[0] / (2 * T);
+        return num('Radar at ' + b[1] + ' with a coherent dwell of ' + qty(T, 's') + ': velocity resolution?', v, 'm/s', R8, 'Δv = λ/(2T) = ' + lenStr(b[0]) + ' / (2 × ' + qty(T, 's') + ') = ' + fmt(v) + ' m/s. Longer dwell, finer Doppler.', [v * 2]);
+      })
+    },
+    ant: {
+      arr: lv(3, function () {
+        var n = pick([2, 4, 8, 16, 64, 256]);
+        return num('An array of ' + n + ' identical elements: gain over a single element?', calc.db10(n), 'dB', DB, 'Array gain = 10·log(N) = ' + f1(calc.db10(n)) + ' dB. Doubling the elements adds 3 dB.', [calc.db20(n)]);
+      }),
+      arrbw: lv(3, function () {
+        var n = pick([4, 8, 16, 32, 64]);
+        return num('Broadside beamwidth of a line array of ' + n + ' elements at λ/2 spacing?', 101.6 / n, '°', R10, 'θ ≈ 102° / N for half-wavelength spacing = ' + fmt(101.6 / n) + '°.');
+      })
+    },
+    react: {
+      cres: lv(2, function () {
+        var p = pick([[1e-6, 15.92e6], [10e-6, 5.03e6], [100e-9, 159.2e6], [1e-3, 159.2e3], [1e-6, 5.03e6], [10e-6, 1.592e6]]), s = si(1 / (Math.pow(2 * PI * p[1], 2) * p[0]), 'F');
+        return num('Capacitance to resonate ' + qty(p[0], 'H') + ' at ' + qty(p[1], 'Hz') + '?', s.v, s.u, R10, 'C = 1/((2πf)²·L) = ' + fmt(s.v) + ' ' + s.u + '. Anchor: 1 µH with 100 pF is 15.9 MHz; ÷10 in frequency needs ×100 in C.');
+      }),
+      qx: lv(2, function () {
+        var p = pick([[500, 5], [100, 2], [50, 0.5], [1000, 10], [200, 4], [300, 2]]);
+        return num('Inductor with ' + p[0] + ' Ω reactance and ' + p[1] + ' Ω series resistance: Q?', p[0] / p[1], '', R5, 'Q = X / R = ' + fmt(p[0] / p[1]) + '.');
+      }),
+      zmag: lv(3, function () {
+        var p = pick([[3, 4], [30, 40], [50, 50], [100, 100], [5, 12], [8, 6], [600, 800]]), z = Math.hypot(p[0], p[1]);
+        return num('Series ' + p[0] + ' Ω resistance and ' + p[1] + ' Ω reactance: impedance magnitude?', z, 'Ω', R5, '|Z| = √(R² + X²) = ' + fmt(z) + ' Ω. They add at right angles, not directly.', [p[0] + p[1]]);
+      }),
+      rp: lv(3, function () {
+        var Q = pick([50, 100, 200]), X = pick([50, 100, 500]), s = si(Q * X, 'Ω');
+        return num('Parallel-resonant tank with Q = ' + Q + ' and ' + X + ' Ω reactance: impedance at resonance?', s.v, s.u, R5, 'R_p = Q·X = ' + fmt(s.v) + ' ' + s.u + '.', [X / Q / (Q * X / s.v)]);
+      })
+    },
+    ckt: {
+      rise: lv(2, function () {
+        var bw = pick([3.5e6, 20e6, 70e6, 100e6, 350e6, 1e9]), s = si(0.35 / bw, 's');
+        return num('Rise time of a ' + qty(bw, 'Hz') + ' scope or amplifier?', s.v, s.u, R8, 't_r ≈ 0.35 / bandwidth = ' + fmt(s.v) + ' ' + s.u + '.');
+      }),
+      load: lv(3, function () {
+        var p = pick([[5, 10e3, 10e3, 10e3], [12, 1e3, 1e3, 1e3], [10, 10e3, 10e3, 100e3], [3.3, 1e3, 2e3, 2e3], [9, 2e3, 1e3, 1e3]]), rb = p[2] * p[3] / (p[2] + p[3]), v = p[0] * rb / (p[1] + rb);
+        return num(p[0] + ' V divider, ' + qty(p[1], 'Ω') + ' over ' + qty(p[2], 'Ω') + ', loaded with ' + qty(p[3], 'Ω') + '. Output voltage?', v, 'V', R5,
+          'The load sits in parallel with the bottom resistor: ' + qty(rb, 'Ω') + '. V_out = ' + p[0] + ' × ' + fmt(rb / (p[1] + rb)) + ' = ' + fmt(v) + ' V.', [p[0] * p[2] / (p[1] + p[2])]);
+      }),
+      opamp: lv(3, function () {
+        var p;
+        if (rnd() < 0.5) { p = pick([[10e3, 1e3], [9e3, 1e3], [100e3, 1e3], [1e3, 1e3], [47e3, 4.7e3]]); return num('Non-inverting amplifier with R_f = ' + qty(p[0], 'Ω') + ' and R_g = ' + qty(p[1], 'Ω') + ': gain?', 1 + p[0] / p[1], '', R5, 'Gain = 1 + R_f/R_g = ' + fmt(1 + p[0] / p[1]) + '.', [p[0] / p[1], -p[0] / p[1]]); }
+        p = pick([[10e3, 1e3], [100e3, 10e3], [22e3, 2.2e3], [1e3, 2e3], [100e3, 1e3]]);
+        return num('Inverting amplifier with R_f = ' + qty(p[0], 'Ω') + ' and R_in = ' + qty(p[1], 'Ω') + ': gain?', -p[0] / p[1], '', R5, 'Gain = −R_f/R_in = ' + fmt(-p[0] / p[1]) + '.', [p[0] / p[1], -(1 + p[0] / p[1]), 1 + p[0] / p[1]]);
+      })
+    },
+    sdr: {
+      edge: lv(2, function () {
+        var fc = pick([100, 145, 435, 1090, 1575, 2400]), fs = pick([1e6, 2e6, 2.4e6, 10e6, 20e6]), hi = rnd() < 0.5, h = fs / 2e6;
+        return num('IQ capture centred on ' + fc + ' MHz at ' + qty(fs, 'S/s') + ': ' + (hi ? 'highest' : 'lowest') + ' frequency in view?', hi ? fc + h : fc - h, 'MHz', { abs: 0.05 },
+          'IQ sampling shows fs/2 on each side of centre: ' + fc + (hi ? ' + ' : ' − ') + fmt(h) + ' = ' + fmt(hi ? fc + h : fc - h, 6) + ' MHz.', [hi ? fc + 2 * h : fc - 2 * h, hi ? fc - h : fc + h, fc]);
+      }),
+      ovs: lv(3, function () {
+        var k = pick([4, 16, 64, 256]);
+        if (rnd() < 0.5) return num('Oversampling by ' + k + ' and filtering: extra bits of resolution?', Math.log2(k) / 2, 'bits', INT, 'Each ×4 of oversampling spreads the quantisation noise for 6 dB, which is one extra bit: ' + (Math.log2(k) / 2) + ' bits.', [Math.log2(k)]);
+        return num('Oversampling by ' + k + ' and filtering: SNR improvement?', calc.db10(k), 'dB', DB, 'Gain = 10·log(' + k + ') = ' + f1(calc.db10(k)) + ' dB. Each ×4 is 6 dB.', [calc.db20(k)]);
+      }),
+      jit: lv(3, function () {
+        var p = pick([[100e6, 1e-12], [10e6, 1e-12], [1e9, 100e-15], [100e6, 10e-12], [1e9, 1e-12], [10e6, 10e-12]]), a = -20 * log10(2 * PI * p[0] * p[1]);
+        return num('Sampling a ' + qty(p[0], 'Hz') + ' input with ' + qty(p[1], 's') + ' RMS clock jitter: SNR limit?', a, 'dB', { abs: 1 }, 'SNR = −20·log(2π·f·t_j) = ' + f1(a) + ' dB. Anchor: 100 MHz with 1 ps gives 64 dB; ×10 in either costs 20 dB.', null, { pos: true });
+      })
+    },
+    alias: {
+      iqfold: lv(3, function () {
+        var fs = pick([1e6, 2e6, 2.4e6, 10e6]), off = pick([0.6, 0.7, 0.8, 0.9]) * fs * pick([1, -1]), a = ((off + fs / 2) % fs + fs) % fs - fs / 2, s = si(Math.abs(a), 'Hz'), v = a < 0 ? -s.v : s.v;
+        return num('IQ sampling at ' + qty(fs, 'S/s') + '. A signal ' + qty(Math.abs(off), 'Hz') + (off > 0 ? ' above' : ' below') + ' centre appears at what offset (signed)?', v, s.u, { rel: 0.03 },
+          'IQ data only holds ±fs/2. The signal wraps by one fs: ' + (off > 0 ? '+' : '−') + qty(Math.abs(off), 'Hz') + (off > 0 ? ' − ' : ' + ') + qty(fs, 'Hz') + ' = ' + fmt(v) + ' ' + s.u + '.', [-v, off / (Math.abs(a) / s.v)]);
+      }),
+      decal: lv(3, function () {
+        var p = pick([[48e3, 4, 10e3], [48e3, 4, 7e3], [2.4e6, 10, 150e3], [1e6, 4, 200e3], [96e3, 2, 30e3]]), out = p[0] / p[1], s = si(calc.alias(p[2], out), 'Hz');
+        return num(qty(p[0], 'S/s') + ' decimated by ' + p[1] + ' with no filter. A ' + qty(p[2], 'Hz') + ' tone ends up at?', s.v, s.u, { rel: 0.03 },
+          'The new rate is ' + qty(out, 'S/s') + ', so anything above ' + qty(out / 2, 'Hz') + ' folds: |' + qty(p[2], 'Hz') + ' − ' + qty(out, 'Hz') + '| = ' + fmt(s.v) + ' ' + s.u + '.');
+      })
+    },
+    fft: {
+      zp: lv(2, function () {
+        var p = pick([[1000, 1e3, 4096], [1024, 1.024e6, 8192], [100, 10e3, 1024], [4800, 48e3, 65536], [500, 1e6, 4096]]), s = si(p[1] / p[0], 'Hz'), k = p[1] / p[0] / s.v;
+        return num(p[0] + ' samples at ' + qty(p[1], 'S/s') + ', zero-padded to ' + p[2] + ' points. True frequency resolution?', s.v, s.u, R5, 'Zero-padding only interpolates the spectrum. Resolution is still fs/N of the real data: ' + fmt(s.v) + ' ' + s.u + '.', [p[1] / p[2] / k]);
+      }),
+      rbw: lv(3, function () {
+        var p = pick([[48e3, 4800], [1e6, 1000], [2.4e6, 2400], [10e6, 10000], [8e3, 800]]), s = si(1.5 * p[0] / p[1], 'Hz');
+        return num('Hann-windowed FFT of ' + p[1] + ' points at ' + qty(p[0], 'S/s') + ': noise bandwidth of one bin?', s.v, s.u, R5, 'Bin width ' + qty(p[0] / p[1], 'Hz') + ' × 1.5 (the ENBW of Hann) = ' + fmt(s.v) + ' ' + s.u + '.', [s.v / 1.5]);
+      }),
+      nfloor: lv(3, function () {
+        var k = pick([2, 4, 10, 16, 100]);
+        return num('Making the FFT ' + k + ' times longer lowers the per-bin noise floor by?', calc.db10(k), 'dB', DB, 'Each bin gets ' + k + ' times narrower, so it holds 10·log(' + k + ') = ' + f1(calc.db10(k)) + ' dB less noise. A tone stays where it was.', [calc.db20(k)]);
+      })
+    },
+    win: {
+      loss: lv(3, function () {
+        var L = { 'Hann': '1.76 dB', 'Hamming': '1.34 dB', 'Blackman': '2.37 dB' }, w = pick(Object.keys(L));
+        return mc('SNR lost to a ' + w + ' window compared with rectangular?', L[w], ['0 dB', '1.34 dB', '1.76 dB', '2.37 dB', '3.9 dB'], 'Processing loss = 10·log(ENBW in bins): Hamming 1.36 bins → 1.34 dB, Hann 1.5 → 1.76 dB, Blackman 1.73 → 2.37 dB.');
+      }),
+      corr: lv(3, function () {
+        return item([
+          ['To read a tone\'s true amplitude through a Hann window, multiply the peak by', '2', ['1.5', '1.41', '4'], 'The Hann coherent gain is 0.5, so amplitudes need ×2.'],
+          ['To read noise density through a Hann window, divide bin power by a bandwidth of', '1.5 bins', ['1 bin', '2 bins', '4 bins'], 'Noise fills the window\'s equivalent noise bandwidth, 1.5 bins for Hann.'],
+          ['Which window choice changes how far apart two tones must be to resolve?', 'Main-lobe width', ['Sidelobe roll-off rate', 'Coherent gain', 'Scalloping loss'], 'Resolution is set by main-lobe width; sidelobes set how weak a neighbour you can still see.'],
+          ['A weak tone 5 bins from one 50 dB stronger: which window shows it?', 'Blackman', ['Rectangular', 'Hann at −31 dB', 'None can'], 'You need sidelobes well below −50 dB that close in. Blackman reaches −58 dB.']
+        ]);
+      })
+    },
+    xform: {
+      am: lv(3, function () {
+        var fm = pick([1, 5, 10, 20]), fc = pick([100, 455, 1000]), up = rnd() < 0.5;
+        return num('A ' + fm + ' kHz tone multiplied by a ' + fc + ' kHz carrier: frequency of the ' + (up ? 'upper' : 'lower') + ' product?', up ? fc + fm : fc - fm, 'kHz', { abs: 0.4 },
+          'Multiplying by a cosine puts copies at carrier ± tone: ' + (fc - fm) + ' kHz and ' + (fc + fm) + ' kHz.', [fc, up ? fc - fm : fc + fm, fm]);
+      }),
+      sym: lv(3, function () {
+        return item([
+          ['The transform of a real, even signal is', 'Real and even', ['Imaginary and odd', 'Real and odd', 'Imaginary and even'], 'Real and even stays real and even; real and odd becomes imaginary and odd.'],
+          ['The transform of a real, odd signal is', 'Imaginary and odd', ['Real and even', 'Real and odd', 'Imaginary and even'], 'Real and even stays real and even; real and odd becomes imaginary and odd.'],
+          ['The value of a spectrum at f = 0 equals', 'The area under the signal', ['The signal\'s peak value', 'The signal\'s energy', 'Zero'], 'X(0) is the integral of x(t): the DC bin is the total area.'],
+          ['Multiplying a signal by cos(2πf₀t) gives', 'Half-size copies at +f₀ and −f₀', ['One full-size copy at +f₀', 'A copy at 2f₀ only', 'The same spectrum, phase-shifted'], 'A cosine is two complex exponentials of half amplitude, so the spectrum splits into two half-size copies.'],
+          ['Parseval: energy summed in time equals', 'Energy summed in frequency', ['Twice the energy in frequency', 'The DC value squared', 'The peak of the spectrum'], 'Energy is the same in both domains.'],
+          ['Doubling a signal\'s amplitude does what to its power spectrum?', 'Multiplies it by 4', ['Multiplies it by 2', 'Shifts it up in frequency', 'Leaves it unchanged'], 'Power goes with amplitude squared: ×2 in amplitude is ×4 (6 dB) in power.']
+        ]);
+      })
+    },
+    iq: {
+      ppm: lv(2, function () {
+        var p = pick([[1, 1090e6], [20, 2.4e9], [0.5, 12e9], [2, 435e6], [10, 100e6], [1, 10e9], [25, 145e6]]), s = si(p[0] * p[1] * 1e-6, 'Hz');
+        return num(p[0] + ' ppm of oscillator error at ' + qty(p[1], 'Hz') + ': frequency error?', s.v, s.u, R5, '1 ppm is 1 Hz per MHz: ' + p[0] + ' × ' + fmt(p[1] / 1e6, 5) + ' Hz = ' + fmt(s.v) + ' ' + s.u + '.');
+      }),
+      evm: lv(3, function () {
+        if (rnd() < 0.5) { var e = pick([1, 3.16, 5, 10, 31.6]); return num('An EVM of ' + e + ' % in dB?', calc.db20(e / 100), 'dB', DB, 'EVM(dB) = 20·log(EVM/100) = ' + f1(calc.db20(e / 100)) + ' dB. 10 % is −20 dB, 1 % is −40 dB.', [calc.db10(e / 100)]); }
+        var d = pick([-40, -30, -26, -20]);
+        return num('An EVM of ' + sg(d) + ' dB as a percentage?', 100 * calc.lin20(d), '%', R8, '100 × 10^(dB/20) = ' + fmt(100 * calc.lin20(d)) + ' %.');
+      }),
+      drift: lv(3, function () {
+        var p = pick([[100, 1e-3, 36], [10, 10e-3, 36], [1000, 0.25e-3, 90], [50, 10e-3, 180], [25, 10e-3, 90], [500, 1e-3, 180]]);
+        return num('A ' + qty(p[0], 'Hz') + ' frequency offset left uncorrected for ' + qty(p[1], 's') + ': phase drift in degrees?', p[2], '°', { abs: 2 }, 'Phase = 360° × f × t = 360 × ' + fmt(p[0] * p[1]) + ' = ' + p[2] + '°.', [p[2] * 2, p[2] / 2, 360 - p[2]]);
+      })
+    },
+    dfreq: {
+      cps: lv(2, function () {
+        var x = pick([0.05, 0.1, 0.125, 0.2, 0.25, 0.4]), fs = pick([8e3, 48e3, 1e6, 2.4e6]), s = si(x * fs, 'Hz');
+        return num(x + ' cycles per sample at ' + qty(fs, 'S/s') + ': frequency?', s.v, s.u, R5, 'f = (cycles per sample) × fs = ' + fmt(s.v) + ' ' + s.u + '. 0.5 cycles per sample is Nyquist.', [s.v * 2, s.v / 2]);
+      }),
+      ncores: lv(3, function () {
+        var p = pick([[48e3, 16], [1.024e6, 10], [1e6, 20], [100e6, 32], [4.096e6, 12], [1e6, 16]]), s = si(p[0] / Math.pow(2, p[1]), 'Hz');
+        return num('NCO with a ' + p[1] + '-bit phase accumulator at ' + qty(p[0], 'S/s') + ': frequency step?', s.v, s.u, R8, 'Step = fs / 2^N = ' + qty(p[0], 'Hz') + ' / 2^' + p[1] + ' = ' + fmt(s.v) + ' ' + s.u + '.');
+      }),
+      ncoword: lv(3, function () {
+        var p = pick([[16, 4], [16, 8], [10, 4], [12, 16], [8, 4], [16, 16]]), w = Math.pow(2, p[0]) / p[1];
+        return num(p[0] + '-bit NCO: tuning word for an output of fs/' + p[1] + '?', w, '', INT, 'Word = 2^N × f/fs = ' + Math.pow(2, p[0]) + ' / ' + p[1] + ' = ' + w + '.', [w * 2, w / 2, Math.pow(2, p[0])]);
+      })
+    },
+    filt: {
+      roll: lv(3, function () {
+        var n = pick([1, 2, 3, 4, 6]), dec = rnd() < 0.5, a = dec ? 20 * n : 6.02 * n;
+        return num('Order-' + n + ' low-pass, one ' + (dec ? 'decade' : 'octave') + ' above cutoff: attenuation (asymptote)?', a, 'dB', DB, 'Each order gives 20 dB per decade, or 6 dB per octave: ' + f1(a) + ' dB.', [dec ? 6 * n : 20 * n], { pos: true });
+      }),
+      cic: lv(3, function () {
+        var p = pick([[3, 16], [4, 64], [5, 8], [3, 32], [2, 256]]), b = p[0] * Math.log2(p[1]);
+        return num('CIC decimator with ' + p[0] + ' stages, decimating by ' + p[1] + ': bit growth?', b, 'bits', INT, 'Growth = N·log₂(R) = ' + p[0] + ' × ' + Math.log2(p[1]) + ' = ' + b + ' bits.', [Math.log2(p[1]), p[0] + Math.log2(p[1])]);
+      })
+    },
+    mod: {
+      eff: lv(3, function () {
+        var p = pick([[2, 'QPSK', 1 / 2, '1/2', 0.2], [4, '16-QAM', 3 / 4, '3/4', 0.2], [6, '64-QAM', 2 / 3, '2/3', 0.25], [2, 'QPSK', 3 / 4, '3/4', 0.35], [8, '256-QAM', 3 / 4, '3/4', 0.2], [3, '8-PSK', 2 / 3, '2/3', 0.25]]), e = p[0] * p[2] / (1 + p[4]);
+        return num(p[1] + ', code rate ' + p[3] + ', roll-off ' + p[4] + ': spectral efficiency?', e, 'b/s/Hz', R5, 'Bits per symbol × code rate / (1 + α) = ' + p[0] + ' × ' + p[3] + ' / ' + (1 + p[4]) + ' = ' + fmt(e) + ' b/s/Hz.', [p[0], p[0] * p[2]]);
+      }),
+      need: lv(3, function () {
+        var e = pick([1, 2, 4, 6, 8, 10]), a = calc.db10(Math.pow(2, e) - 1);
+        return num('Minimum SNR (Shannon limit) for ' + e + ' b/s/Hz?', a, 'dB', { abs: 0.7 }, 'SNR = 2^η − 1 = ' + (Math.pow(2, e) - 1) + ' → ' + f1(a) + ' dB. For large η that is about 3·η dB.');
+      })
+    },
+    pg: {
+      cw: lv(3, function () {
+        var b = pick([1e6, 5e6, 10e6, 50e6, 100e6]), s = si(1 / b, 's');
+        return num('A chirp with ' + qty(b, 'Hz') + ' of bandwidth, after pulse compression: pulse width?', s.v, s.u, R5, 'Compressed width ≈ 1/B = ' + fmt(s.v) + ' ' + s.u + ', whatever the transmitted length.');
+      }),
+      nci: lv(3, function () {
+        var n = pick([4, 16, 100, 10000]);
+        return num('Non-coherently averaging ' + n + ' spectra: approximate detection gain (√N rule)?', calc.db10(Math.sqrt(n)), 'dB', DB, 'Without phase, gain grows only as √N: 10·log(√' + n + ') = ' + f1(calc.db10(Math.sqrt(n))) + ' dB. Coherent averaging would give ' + f1(calc.db10(n)) + ' dB.', [calc.db10(n)]);
+      })
+    },
+    quant: {
+      qn: lv(3, function () {
+        var l = pick([1e-3, 10e-3, 244e-6, 1, 0.1]), s = si(l / Math.sqrt(12), 'V');
+        return num('Quantisation noise (RMS) for an LSB of ' + qty(l, 'V') + '?', s.v, s.u, R8, 'RMS = LSB/√12 ≈ 0.289 × LSB = ' + fmt(s.v) + ' ' + s.u + '.');
+      }),
+      q15: lv(3, function () {
+        var p = pick([[0.5, 16384], [0.25, 8192], [-0.5, -16384], [0.125, 4096], [0.75, 24576], [-1, -32768]]);
+        if (rnd() < 0.5) return num('Integer stored for ' + fmt(p[0]) + ' in Q1.15?', p[1], '', INT, 'Multiply by 2¹⁵ = 32768: ' + fmt(p[0]) + ' × 32768 = ' + fixed(p[1], 0) + '.', [p[1] * 2, p[1] / 2, -p[1]], { neg: true });
+        return num('A Q1.15 word holding ' + fixed(p[1], 0) + ': its value?', p[0], '', { abs: 0.005 }, 'Divide by 2¹⁵ = 32768: ' + fmt(p[0]) + '.', [p[0] * 2, p[0] / 2, -p[0]]);
+      }),
+      trunc: lv(3, function () {
+        var k = pick([1, 2, 4, 8]);
+        return num('Dropping the ' + k + ' lowest bit' + (k > 1 ? 's' : '') + ' of a signal raises its quantisation noise by about?', 6.02 * k, 'dB', DB, 'About 6 dB per bit: ' + f1(6.02 * k) + ' dB.', null, { pos: true });
+      })
+    }
+  };
+  /* existing types that belong to level 2 */
+  var GATE = { dbm: ['dbm2v'], chain: ['need'], link: ['dbd', 'range'], time: ['prf'], ant: ['ff'], react: ['bw'], ckt: ['led', 'caps'], sdr: ['adc'], alias: ['bp', 'zone'], fft: ['neg', 'nres'],
+    win: ['enbw', 'misc'], xform: ['phase', 'nul'], iq: ['rot', 'magdb'], dfreq: ['w2f'], filt: ['taps', 'tc', 'pz'], mod: ['esn0', 'shan', 'ofdm'], pg: ['pc', 'ss', 'fftg'], quant: ['enob', 'grow', 'lsb'] };
+  /* what each level of a chapter covers, shown on the chapter page */
+  var LEVELS = {
+    db: ['Anchor ratios to dB and back', 'In-between values and chained ratios', 'Adding powers, and dB as a percentage'],
+    dbm: ['dBm, dBW and watts', 'Volts into 50 Ω, both ways', 'dBµV and power density in dBm/Hz'],
+    chain: ['Short chains: output level and net gain', 'Longer chains, missing gain, splitters', 'Third-order intercept and intermod levels'],
+    wave: ['Wavelength, fractions, band names', 'Velocity factor and dielectrics', 'Electrical length in degrees'],
+    match: ['VSWR, return loss, reflected power', 'Reflection coefficient and mismatch loss', 'Quarter-wave transformers and L-match Q'],
+    noise: ['kTB floor, noise figure, sensitivity', 'Noise temperature and loss ahead of the LNA', 'Cascaded noise figure and C/N₀'],
+    link: ['Path loss, EIRP, received power, margin', 'dBd, range scaling, radio horizon', 'Line of sight, Fresnel zone, maximum distance'],
+    time: ['Delay, echo range, Doppler shift', 'Unambiguous range and speed from Doppler', 'Blind speed and velocity resolution'],
+    ant: ['Beamwidth, dish gain, dipoles, polarisation', 'Far field and effective aperture', 'Array gain and array beamwidth'],
+    react: ['Reactance, resonance, time constants', 'Bandwidth, Q, and choosing C for resonance', 'Impedance magnitude and tank impedance'],
+    ckt: ['Parallel parts, dividers, cutoffs, prefixes', 'LED resistors, capacitors, rise time', 'Loaded dividers and op-amp gains'],
+    sdr: ['Nyquist, IQ bandwidth, file sizes', 'ADC range and band edges of a capture', 'Oversampling gain and clock jitter'],
+    alias: ['Alias frequency and decimation', 'Nyquist zones and bandpass sampling', 'IQ wrap-around and unfiltered decimation'],
+    fft: ['Bin width, bin index, capture time', 'FFT length, negative bins, zero-padding', 'Noise bandwidth and noise floor per bin'],
+    win: ['Sidelobes, main lobes, choosing a window', 'ENBW, scalloping, roll-off', 'Processing loss and corrections'],
+    xform: ['Fourier pairs and properties', 'Pulse nulls and delay as phase', 'Symmetry, modulation products, Parseval'],
+    iq: ['Magnitude, phase, rotation by j', 'Frequency offset, dB, ppm errors', 'EVM and phase drift'],
+    dfreq: ['Radians per sample, samples per cycle', 'Converting back to Hz', 'NCO step size and tuning words'],
+    filt: ['FIR delay, moving average, convolution length', 'Tap count, poles and zeros, time constants', 'Roll-off per order and CIC bit growth'],
+    mod: ['Bits per symbol, bit rate, bandwidth', 'Coding, Eb/N0, Shannon capacity, OFDM', 'Spectral efficiency and the SNR it needs'],
+    pg: ['Averaging gain and range resolution', 'FFT, pulse-compression and spreading gain', 'Compressed pulse width and non-coherent gain'],
+    quant: ['Levels, bits, dBFS, fixed-point basics', 'LSB size, ENOB, bit growth', 'Quantisation noise, Q1.15 values, truncation']
+  };
+  MODULES.forEach(function (m) {
+    var x = EXTRA[m.id] || {};
+    Object.keys(x).forEach(function (id) { m.types[id] = x[id]; });
+    (GATE[m.id] || []).forEach(function (id) { m.types[id].min = 2; });
+    m.levels = m.levels || LEVELS[m.id];
+  });
+
   var GROUPS = ['RF', 'DSP', 'Circuits'];
   var BY_ID = {};
   MODULES.forEach(function (m) { BY_ID[m.id] = m; });
+
+  /* ---------- hidden chapters ---------- */
+  function visible(mod, stats) { return !mod.parents || mod.parents.some(function (p) { return levelInfo(BY_ID[p], stats).complete; }); }
+  function reveals(id) { return MODULES.filter(function (m) { return m.parents && m.parents.indexOf(id) >= 0; }); }
 
   /* ---------- selection ---------- */
   function typeIds(mod, L) { return Object.keys(mod.types).filter(function (id) { return (mod.types[id].min || 1) <= L; }); }
@@ -910,10 +1464,17 @@
     q.mod = modId; q.key = modId + '.' + typeId;
     return q;
   }
-  function moduleLevel(mod, stats) {
-    var c = 0;
-    Object.keys(mod.types).forEach(function (id) { var s = stats[mod.id + '.' + id]; if (s) c += s.c; });
-    return c < 12 ? 1 : c < 35 ? 2 : 3;
+  function moduleLevel(mod, stats) { return levelInfo(mod, stats).level; }
+  // Level 2 opens after about three correct answers per level-1 type, level 3 after the same for levels 1 and 2.
+  function levelInfo(mod, stats) {
+    var c = 0, n1 = 0, n2 = 0;
+    Object.keys(mod.types).forEach(function (id) {
+      var s = stats[mod.id + '.' + id], min = mod.types[id].min || 1;
+      if (s) c += s.c;
+      if (min === 1) n1++; else if (min === 2) n2++;
+    });
+    var at2 = Math.max(8, 3 * n1), at3 = Math.max(20, 3 * (n1 + n2)), L = c < at2 ? 1 : c < at3 ? 2 : 3;
+    return { level: L, correct: c, at: [0, at2, at3], next: L === 1 ? at2 : L === 2 ? at3 : null, complete: L === 3 && mastery(mod, stats) >= 0.85 };
   }
   function mastery(mod, stats) {
     var ids = Object.keys(mod.types), t = 0;
@@ -1009,7 +1570,7 @@
 
   var api = {
     MODULES: MODULES, GROUPS: GROUPS, BY_ID: BY_ID, calc: calc, fmt: fmt, ansStr: ansStr, check: check, choices: choices, hilo: hilo,
-    generate: generate, typeIds: typeIds, moduleLevel: moduleLevel, mastery: mastery, pickType: pickType, pickAny: pickAny,
+    generate: generate, typeIds: typeIds, moduleLevel: moduleLevel, levelInfo: levelInfo, visible: visible, reveals: reveals, mastery: mastery, pickType: pickType, pickAny: pickAny,
     SCENARIOS: SCENARIOS, SCENARIO_TITLES: SCENARIO_TITLES, scenarioIndex: scenarioIndex,
     setRng: function (f) { rnd = f || Math.random; }
   };

@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var E = window.Engine, $app = document.getElementById('app');
-  var KEY = 'rfreflex.v1', VERSION = '1.0';
+  var KEY = 'rfreflex.v1', VERSION = '1.2';
   var st = load(), view = { name: 'home' }, sess = null, resetArmed = false;
 
   function blank() { return { types: {}, best: {}, days: {}, scen: {}, settings: { input: 'auto' } }; }
@@ -46,26 +46,46 @@
     html += '<section class="cta"><button class="big primary" data-act="mix"><div class="grow"><b>Daily mix</b><span>20 questions, weighted to your weak spots</span></div></button>' +
       '<button class="big" data-act="scenario"><div class="grow"><b>Scenario: ' + h(E.SCENARIO_TITLES[idx]) + '</b><span>One real case, worked in steps</span></div>' +
       (st.scen[today()] ? '<span class="done">DONE</span>' : '') + '</button></section>';
+    function tile(m) {
+      var li = E.levelInfo(m, st.types);
+      return '<button class="mod' + (li.complete ? ' fin' : '') + '" data-act="mod" data-id="' + m.id + '"><div class="mod-h"><b>' + h(m.name) + '</b><span class="lvl' + (li.complete ? ' ok' : '') + '">' + (li.complete ? 'DONE' : 'L' + li.level) +
+        '</span></div><p>' + (m.parents && !totals(m.id).n ? '<em class="new">NEW</em> ' : '') + h(li.complete ? 'Tap to revise.' : m.levels[li.level - 1]) + '</p><div class="bar"><i style="width:' + Math.round(100 * E.mastery(m, st.types)) + '%"></i></div></button>';
+    }
+    var shown = E.MODULES.filter(function (m) { return E.visible(m, st.types); }), left = E.MODULES.length - shown.length;
+    var done = shown.filter(function (m) { return E.levelInfo(m, st.types).complete; });
     E.GROUPS.forEach(function (g) {
-      html += '<section class="group"><h2>' + g + '</h2><div class="mods">';
-      E.MODULES.filter(function (m) { return m.group === g; }).forEach(function (m) {
-        html += '<button class="mod" data-act="mod" data-id="' + m.id + '"><div class="mod-h"><b>' + h(m.name) + '</b><span class="lvl">L' + E.moduleLevel(m, st.types) + '</span></div><p>' + h(m.blurb) +
-          '</p><div class="bar"><i style="width:' + Math.round(100 * E.mastery(m, st.types)) + '%"></i></div></button>';
-      });
-      html += '</div></section>';
+      var open = shown.filter(function (m) { return m.group === g && done.indexOf(m) < 0; });
+      if (open.length) html += '<section class="group"><h2>' + g + '</h2><div class="mods">' + open.map(tile).join('') + '</div></section>';
     });
-    html += '<div class="foot">Works offline. Progress stays on this phone.</div>';
+    if (done.length) html += '<section class="group"><h2>Completed · revise any time</h2><div class="mods">' + done.map(tile).join('') + '</div></section>';
+    html += '<div class="foot">' + (left ? left + ' hidden chapter' + (left > 1 ? 's' : '') + ' left. Completing all three levels of a chapter reveals one.<br>' : '') + 'Works offline. Progress stays on this phone.</div>';
     return html;
   }
   function modulePage(id) {
-    var m = E.BY_ID[id], t = totals(id), b = st.best[id + ':60'];
-    return '<header class="head"><button class="icon" data-act="home" aria-label="Back">' + IC.back + '</button><h1>' + h(m.name) + '</h1><span class="lvl">LEVEL ' + E.moduleLevel(m, st.types) + '</span></header>' +
+    var m = E.BY_ID[id], t = totals(id), b = st.best[id + ':60'], li = E.levelInfo(m, st.types);
+    var lv = m.levels.map(function (txt, i) {
+      var L = i + 1, state = L < li.level || li.complete ? 'done' : L === li.level ? 'on' : 'lock', note;
+      if (state === 'done') note = 'Unlocked';
+      else if (state === 'lock') note = 'Unlocks at ' + li.at[i] + ' correct answers (you have ' + li.correct + ')';
+      else note = li.next ? 'In progress: ' + li.correct + ' of ' + li.next + ' correct to reach level ' + (L + 1) : 'Final level: get every question type right five times to complete the chapter';
+      return '<div class="lv ' + state + '"><span class="lvl">L' + L + '</span><div><b>' + h(txt) + '</b><span>' + note + '</span></div></div>';
+    }).join('');
+    return '<header class="head"><button class="icon" data-act="home" aria-label="Back">' + IC.back + '</button><h1>' + h(m.name) + '</h1><span class="lvl' + (li.complete ? ' ok' : '') + '">' + (li.complete ? 'COMPLETE' : 'LEVEL ' + li.level) + '</span></header>' +
       '<p class="blurb">' + h(m.blurb) + '</p>' +
-      '<section class="card"><h3>Anchors</h3><ul class="anchors">' + m.anchors.map(function (a) { return '<li>' + h(a) + '</li>'; }).join('') + '</ul></section>' +
+      '<section class="card"><h3>Levels</h3>' + lv + '</section>' +
+      revealCard(m, li) + '<section class="card"><h3>Anchors</h3><ul class="anchors">' + m.anchors.map(function (a) { return '<li>' + h(a) + '</li>'; }).join('') + '</ul></section>' +
       '<section class="kv"><div class="stat"><b>' + t.n + '</b><span>answered</span></div><div class="stat"><b>' + (t.acc == null ? '–' : t.acc + '%') + '</b><span>accuracy</span></div><div class="stat"><b>' + (b == null ? '–' : b) + '</b><span>best 60 s</span></div></section>' +
       '<div class="actions"><button class="btn primary" data-act="start" data-mode="practice">Practice<small>10 questions, no clock</small></button>' +
       '<button class="btn" data-act="start" data-mode="sprint" data-dur="60">Sprint 60 s<small>As many as you can</small></button>' +
       '<button class="btn" data-act="start" data-mode="sprint" data-dur="120">Sprint 120 s</button></div>';
+  }
+  function revealCard(m, li) {
+    var kids = E.reveals(m.id), open = kids.filter(function (k) { return E.visible(k, st.types); });
+    if (!kids.length) return '';
+    if (!open.length) return '<section class="card dim"><h3>Hidden chapter</h3><p class="hint">Complete all three levels here to reveal a new chapter that builds on this one.</p></section>';
+    return '<section class="card"><h3>' + (li.complete ? 'Revealed by this chapter' : 'Builds on this chapter') + '</h3>' + open.map(function (k) {
+      return '<button class="lv link" data-act="mod" data-id="' + k.id + '"><span class="lvl">GO</span><div><b>' + h(k.name) + '</b><span>' + h(k.blurb) + '</span></div></button>';
+    }).join('') + '</section>';
   }
   function clock() { var s = Math.ceil(sess.left / 1000); return Math.floor(s / 60) + ':' + pad(s % 60); }
   function progLabel() { return sess.mode === 'sprint' ? clock() : (sess.idx + 1) + ' / ' + sess.total; }
@@ -110,6 +130,7 @@
     html += '<section class="res"><div class="n">' + r.correct + '<small> / ' + r.answered + '</small></div><p>' + (r.answered ? Math.round(100 * r.correct / r.answered) + '% correct' : 'No answers this round') + '</p>';
     if (r.rate != null) html += '<div class="rate">' + r.rate + ' correct per minute' + (r.newBest ? ' · new best' : r.best != null ? ' · best ' + r.best : '') + '</div>';
     html += '</section>';
+    (r.news || []).forEach(function (n) { html += '<button class="news" data-act="mod" data-id="' + n.id + '"><b>' + h(n.title) + '</b><span>' + h(n.text) + '</span></button>'; });
     if (r.misses.length) {
       html += '<section class="review"><h3>Review</h3>' + r.misses.map(function (m) {
         return '<div class="miss"><div class="p">' + h(m.prompt) + '</div><div class="a"><s>' + h(m.given) + '</s> → <i>' + h(m.answer) + '</i></div><div class="x">' + h(m.explain) + '</div></div>';
@@ -142,7 +163,7 @@
   }
   function isLast() { return sess.mode !== 'sprint' && sess.idx + 1 >= sess.total; }
   function newQuestion() {
-    var q = sess.mode === 'scenario' ? sess.steps[sess.idx] : sess.modId ? E.pickType(E.BY_ID[sess.modId], st.types, sess.lastKey) : E.pickAny(st.types, sess.lastKey);
+    var q = sess.mode === 'scenario' ? sess.steps[sess.idx] : sess.modId ? E.pickType(E.BY_ID[sess.modId], st.types, sess.lastKey) : E.pickAny(st.types, sess.lastKey, E.MODULES.filter(function (m) { return E.visible(m, st.types); }).map(function (m) { return m.id; }));
     sess.q = q; sess.lastKey = q.key; sess.phase = 'ask'; sess.entry = ''; sess.chosen = null; sess.given = '';
     sess.inp = inputFor(q);
     if (sess.inp === 'choice') sess.opts = E.choices(q);
@@ -150,7 +171,9 @@
   }
   function start(cfg) {
     stopTimer();
-    sess = { mode: cfg.mode, modId: cfg.modId || null, dur: cfg.dur || 0, total: cfg.total || 0, idx: 0, correct: 0, answered: 0, misses: [], cfg: cfg, lastKey: null, intro: '' };
+    var before = {};
+    E.MODULES.forEach(function (m) { var li = E.levelInfo(m, st.types); before[m.id] = { level: li.level, complete: li.complete, visible: E.visible(m, st.types) }; });
+    sess = { before: before, mode: cfg.mode, modId: cfg.modId || null, dur: cfg.dur || 0, total: cfg.total || 0, idx: 0, correct: 0, answered: 0, misses: [], cfg: cfg, lastKey: null, intro: '' };
     if (cfg.mode === 'scenario') { var sc = E.SCENARIOS[E.scenarioIndex(today())](); sess.steps = sc.steps; sess.total = sc.steps.length; sess.intro = sc.intro; sess.title = sc.title; }
     newQuestion();
     if (cfg.mode === 'sprint') { sess.left = cfg.dur * 1000; startTimer(); }
@@ -204,6 +227,13 @@
       if (prev == null || sess.correct > prev) { st.best[k] = sess.correct; r.newBest = sess.correct > 0; } else r.best = Math.round(prev / sess.dur * 60 * 10) / 10;
     }
     if (sess.mode === 'scenario') st.scen[today()] = 1;
+    r.news = [];
+    E.MODULES.forEach(function (m) {
+      var li = E.levelInfo(m, st.types), was = sess.before[m.id];
+      if (li.complete && !was.complete) r.news.push({ id: m.id, title: m.name + ' complete', text: 'Every question type mastered. The chapter moves to Completed at the bottom of the home screen, where you can revise it any time.' });
+      else if (li.level > was.level) r.news.push({ id: m.id, title: m.name + ': level ' + li.level + ' unlocked', text: 'New questions: ' + m.levels[li.level - 1] + '.' });
+      if (!was.visible && E.visible(m, st.types)) r.news.push({ id: m.id, title: 'New chapter revealed: ' + m.name, text: m.blurb + ' Tap to open it.' });
+    });
     save(); sess = null;
     go('result', { result: r });
   }
@@ -249,6 +279,8 @@
       if (/^[0-9]$/.test(k) || k === '.') key(k); else if (k === '-') key('±'); else if (k === 'Backspace') key('del'); else if (k === 'Enter') answer('typed');
     } else if (sess.inp === 'choice' && /^[1-4]$/.test(k)) answer('choice', +k - 1);
   });
+  // Used by tests/ui.test.js to answer correctly; harmless in the app.
+  window.rfCorrectIndex = function () { return sess && sess.inp === 'choice' && sess.phase === 'ask' ? sess.opts.findIndex(function (o) { return o.correct; }) : -1; };
   // Called by the Android activity when the system back button is pressed. Returns false to let the app close.
   window.onAndroidBack = function () {
     if (view.name === 'home') return false;

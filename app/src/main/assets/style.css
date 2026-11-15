@@ -139,3 +139,26 @@ svg { display: block; }
 .choice b { display: block; }
 .choice span { color: var(--muted); font-size: 13.5px; }
 .note { color: var(--muted); font-size: 13.5px; padding: 6px 16px 20px; }
+
+/* levels and completion */
+.lvl.ok { color: var(--good); border-color: rgba(55, 211, 154, .4); }
+.mod.fin { opacity: .8; }
+.mod.fin .bar i { background: var(--good); }
+.lv { display: flex; gap: 12px; align-items: flex-start; padding: 8px 0; }
+.lv + .lv { border-top: 1px solid var(--line); }
+.lv .lvl { margin-top: 2px; }
+.lv b { display: block; font-size: 15px; font-weight: 600; }
+.lv span:not(.lvl) { color: var(--muted); font-size: 13px; }
+.lv.lock b { color: var(--muted); font-weight: 500; }
+.lv.lock .lvl { color: var(--muted); border-color: var(--line); }
+.lv.done .lvl { color: var(--good); border-color: rgba(55, 211, 154, .4); }
+.news { display: block; width: calc(100% - 32px); margin: 0 16px 12px; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--accent); background: rgba(255, 178, 36, .08); }
+.news b { display: block; color: var(--accent); margin-bottom: 2px; }
+.news span { color: #c4ccd8; font-size: 14px; }
+
+/* hidden chapters */
+.new { font: 600 10px/1 var(--mono); font-style: normal; letter-spacing: .08em; color: var(--accent-ink); background: var(--accent); border-radius: 4px; padding: 2px 5px; }
+.card.dim h3 { color: var(--muted); }
+.hint { color: var(--muted); font-size: 14px; }
+.lv.link { width: 100%; }
+.lv.link:active { background: var(--panel2); }

@@ -11,6 +11,7 @@ const out = process.env.SHOTS || '/home/claude/shots';
   await p.goto('file://' + path.join(__dirname, '..', 'app', 'src', 'main', 'assets', 'index.html'));
   const shot = n => p.screenshot({ path: path.join(out, n + '.png') });
   const act = sel => p.click(sel);
+  const playRight = async n => { for (let i = 0; i < n; i++) { const k = await p.evaluate(() => window.rfCorrectIndex()); await p.click('.opt >> nth=' + k); await p.click('[data-act="next"]'); } };
   await shot('01-home');
   await p.screenshot({ path: path.join(out, '01b-home-full.png'), fullPage: true });
   await act('[data-id="noise"]'); await shot('02-module');
@@ -61,6 +62,39 @@ const out = process.env.SHOTS || '/home/claude/shots';
   const answered = await p.textContent('.today .stat:nth-child(2) b');
   if (+answered < 30) errs.push('progress not persisted: ' + answered);
   await p.screenshot({ path: path.join(out, '13-home-after.png'), fullPage: true });
+  // levelling: 12 correct in Decibels unlocks level 2 and says so; a mastered chapter moves to Completed
+  await p.evaluate(() => { const s = JSON.parse(localStorage.getItem('rfreflex.v1')); s.types = {}; ['p2db', 'db2p', 'v2db'].forEach(k => s.types['db.' + k] = { n: 4, c: 4, s: 0 }); s.settings.input = 'choice'; localStorage.setItem('rfreflex.v1', JSON.stringify(s)); });
+  await p.reload(); await act('[data-id="db"]');
+  if (!/In progress: 12 of 12|LEVEL 2/.test(await p.textContent('#app'))) errs.push('level card: ' + (await p.textContent('.card')));
+  await shot('16-levels');
+  await p.evaluate(() => { const s = JSON.parse(localStorage.getItem('rfreflex.v1')); s.types['db.p2db'].c = 3; s.types['db.p2db'].n = 3; localStorage.setItem('rfreflex.v1', JSON.stringify(s)); });
+  await p.reload(); await act('[data-id="db"]'); await act('[data-mode="practice"]');
+  await playRight(10);
+  if (!/Decibels: level [23] unlocked/.test(await p.textContent('#app'))) errs.push('no level-up banner');
+  await shot('17-levelup');
+  await p.evaluate(() => { const E = window.Engine, s = JSON.parse(localStorage.getItem('rfreflex.v1')); Object.keys(E.BY_ID.db.types).forEach(k => s.types['db.' + k] = { n: 6, c: 6, s: 6 }); localStorage.setItem('rfreflex.v1', JSON.stringify(s)); });
+  await p.reload();
+  const groups = await p.$$eval('.group h2', els => els.map(e => e.textContent));
+  const last = await p.$$eval('.group:last-of-type .mod b', els => els.map(e => e.textContent));
+  if (!/Completed/.test(groups[groups.length - 1]) || last.join() !== 'Decibels') errs.push('completed section: ' + groups.join('|') + ' / ' + last.join());
+  await p.evaluate(() => window.scrollTo(0, document.body.scrollHeight)); await shot('18-completed');
+  // hidden chapters: nothing hidden is on the home screen until its parent is complete; finishing Decibels reveals one
+  const names = await p.$$eval('.mod b', els => els.map(e => e.textContent));
+  if (names.length !== 23 || !names.includes('Signal-to-noise maths') || names.includes('Dynamic range')) errs.push('visible chapters: ' + names.length + ' ' + names.join(','));
+  if (!/13 hidden chapters left/.test(await p.textContent('.foot'))) errs.push('foot: ' + await p.textContent('.foot'));
+  await act('[data-id="db"]'); if (!/Revealed by this chapter/.test(await p.textContent('#app'))) errs.push('no reveal card on finished chapter'); await shot('19-revealed');
+  await act('[data-act="home"]'); await act('[data-id="chain"]'); if (!/Hidden chapter/.test(await p.textContent('#app')) || /Dynamic range/.test(await p.textContent('#app'))) errs.push('hidden chapter leaked or missing hint');
+  await act('[data-act="home"]');
+  // finishing the last needed question of a chapter announces the reveal on the result screen
+  await p.evaluate(() => { const E = window.Engine, s = JSON.parse(localStorage.getItem('rfreflex.v1')); Object.keys(E.BY_ID.chain.types).forEach(k => s.types['chain.' + k] = { n: 6, c: 6, s: 0 }); s.types['chain.out'] = { n: 3, c: 3, s: 0 }; s.types['chain.net'] = { n: 3, c: 3, s: 0 }; localStorage.setItem('rfreflex.v1', JSON.stringify(s)); });
+  await p.reload();
+  if ((await p.$$eval('.mod b', els => els.map(e => e.textContent))).includes('Dynamic range')) errs.push('Dynamic range visible too early');
+  await act('[data-id="chain"]'); await act('[data-mode="practice"]'); await playRight(10);
+  const rtxt = await p.textContent('#app');
+  if (!/Gain chains complete/.test(rtxt) || !/New chapter revealed: Dynamic range/.test(rtxt)) errs.push('no reveal banner: ' + rtxt.slice(0, 200));
+  await shot('20-reveal-banner');
+  await act('.news >> nth=1'); if (!/Dynamic range/.test(await p.textContent('.head h1'))) errs.push('reveal banner does not open the chapter');
+  await act('[data-act="home"]'); await shot('21-home-new');
   // small phone: nothing may overflow sideways on any screen
   await p.setViewportSize({ width: 320, height: 568 });
   await act('[data-id="mod"]'); await act('[data-mode="practice"]');

@@ -3,7 +3,8 @@
 Offline Android trainer for the mental math an RF and DSP engineer uses all day: decibels, dBm,
 gain chains, wavelength, matching, noise, link budgets, Doppler, antennas, reactance, sampling,
 aliasing, FFT numbers, windows, transform pairs, IQ, filters, modulation, processing gain and
-quantisation. 22 modules, 119 question types, all generated from formulas.
+quantisation. 22 chapters with three levels each, plus 14 hidden chapters that appear when the
+chapter they build on is completed. 263 question types, all generated from formulas.
 
 - **Practice** (10 questions), **Sprint** (60 or 120 s), **Daily mix** (20 questions weighted to
   weak spots) and a **Scenario** of the day (one real case worked in steps).

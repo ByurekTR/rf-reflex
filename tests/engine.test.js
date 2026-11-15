@@ -96,6 +96,30 @@ E.MODULES.forEach(mod => {
   });
 });
 
+// 3b. Every chapter has something new at each level
+E.MODULES.forEach(mod => {
+  ok(mod.id + ' level text', mod.levels && mod.levels.length === 3);
+  [1, 2, 3].forEach(L => ok(mod.id + ' has types at level ' + L, Object.keys(mod.types).some(id => (mod.types[id].min || 1) === L)));
+  ok(mod.id + ' starts incomplete', !E.levelInfo(mod, {}).complete && E.levelInfo(mod, {}).level === 1);
+  const full = {}; Object.keys(mod.types).forEach(id => full[mod.id + '.' + id] = { n: 6, c: 6, s: 6 });
+  ok(mod.id + ' completes', E.levelInfo(mod, full).complete && E.levelInfo(mod, full).level === 3);
+});
+
+// 3c. Hidden chapters: every base chapter reveals one, and only once it is complete
+const base = E.MODULES.filter(m => !m.parents), hidden = E.MODULES.filter(m => m.parents);
+ok('14 hidden chapters', hidden.length === 14, hidden.length);
+base.forEach(m => ok(m.id + ' reveals a chapter', E.reveals(m.id).length >= 1));
+hidden.forEach(hm => {
+  ok(hm.id + ' hidden at start', !E.visible(hm, {}));
+  hm.parents.forEach(pid => {
+    const full = {}; Object.keys(E.BY_ID[pid].types).forEach(id => full[pid + '.' + id] = { n: 6, c: 6, s: 6 });
+    ok(hm.id + ' revealed by ' + pid, E.visible(hm, full));
+    const part = {}; Object.keys(E.BY_ID[pid].types).forEach(id => part[pid + '.' + id] = { n: 3, c: 3, s: 3 });
+    ok(hm.id + ' still hidden when ' + pid + ' is only part done', !E.visible(hm, part));
+  });
+});
+base.forEach(m => ok(m.id + ' visible', E.visible(m, {})));
+
 // 4. Scenarios and selection
 E.SCENARIOS.forEach((f, i) => {
   for (let k = 0; k < 100; k++) {
