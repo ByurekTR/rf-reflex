@@ -86,15 +86,30 @@ const out = process.env.SHOTS || '/home/claude/shots';
   await act('[data-act="home"]'); await act('[data-id="chain"]'); if (!/Hidden chapter/.test(await p.textContent('#app')) || /Dynamic range/.test(await p.textContent('#app'))) errs.push('hidden chapter leaked or missing hint');
   await act('[data-act="home"]');
   // finishing the last needed question of a chapter announces the reveal on the result screen
-  await p.evaluate(() => { const E = window.Engine, s = JSON.parse(localStorage.getItem('rfreflex.v1')); Object.keys(E.BY_ID.chain.types).forEach(k => s.types['chain.' + k] = { n: 6, c: 6, s: 0 }); s.types['chain.out'] = { n: 3, c: 3, s: 0 }; s.types['chain.net'] = { n: 3, c: 3, s: 0 }; localStorage.setItem('rfreflex.v1', JSON.stringify(s)); });
+  await p.evaluate(() => { const E = window.Engine, s = JSON.parse(localStorage.getItem('rfreflex.v1')); Object.keys(E.BY_ID.chain.types).forEach(k => s.types['chain.' + k] = { n: 6, c: 6, s: 0 }); s.types['chain.out'] = { n: 4, c: 4, s: 0 }; localStorage.setItem('rfreflex.v1', JSON.stringify(s)); });
   await p.reload();
   if ((await p.$$eval('.mod b', els => els.map(e => e.textContent))).includes('Dynamic range')) errs.push('Dynamic range visible too early');
-  await act('[data-id="chain"]'); await act('[data-mode="practice"]'); await playRight(10);
+  await act('[data-id="chain"]');
+  if (!/4 of 5 mastered · 1 left to complete the chapter/.test(await p.textContent('#app')) || !/1 more correct/.test(await p.textContent('#app'))) errs.push('types-left card: ' + (await p.textContent('.tsum')));
+  await shot('22-types-left');
+  await act('[data-mode="practice"]'); await playRight(10);
   const rtxt = await p.textContent('#app');
   if (!/Gain chains complete/.test(rtxt) || !/New chapter revealed: Dynamic range/.test(rtxt)) errs.push('no reveal banner: ' + rtxt.slice(0, 200));
   await shot('20-reveal-banner');
   await act('.news >> nth=1'); if (!/Dynamic range/.test(await p.textContent('.head h1'))) errs.push('reveal banner does not open the chapter');
   await act('[data-act="home"]'); await shot('21-home-new');
+  // dashboard
+  await act('[data-act="dash"]');
+  const dtxt = await p.textContent('#app');
+  if (!/of 263 question types mastered/.test(dtxt) || !/2 \/ 36chapters complete/.test(dtxt) || !/2 \/ 14hidden revealed/.test(dtxt) || !/12 hidden chapters/.test(dtxt)) errs.push('dashboard: ' + dtxt.slice(0, 400));
+  await p.screenshot({ path: path.join(out, '23-dashboard.png'), fullPage: true });
+  await act('.crow >> nth=0'); if (!(await p.$('.head h1'))) errs.push('dashboard row does not open a chapter');
+  await act('[data-act="home"]');
+  // progress saved by 1.2 (no "done" list) keeps its completed chapters after the update
+  await p.evaluate(() => { const E = window.Engine, s = JSON.parse(localStorage.getItem('rfreflex.v1')); delete s.done; s.types = {}; Object.keys(E.BY_ID.noise.types).forEach((k, i) => s.types['noise.' + k] = i === 0 ? { n: 4, c: 4, s: 0 } : { n: 6, c: 6, s: 0 }); localStorage.setItem('rfreflex.v1', JSON.stringify(s)); });
+  await p.reload();
+  const kept = await p.$$eval('.group:last-of-type .mod b', els => els.map(e => e.textContent));
+  if (kept.join() !== 'Noise' || !(await p.$$eval('.mod b', els => els.map(e => e.textContent))).includes('System noise & G/T')) errs.push('1.2 progress not carried over: ' + kept.join());
   // small phone: nothing may overflow sideways on any screen
   await p.setViewportSize({ width: 320, height: 568 });
   await act('[data-id="mod"]'); await act('[data-mode="practice"]');

@@ -162,3 +162,37 @@ svg { display: block; }
 .hint { color: var(--muted); font-size: 14px; }
 .lv.link { width: 100%; }
 .lv.link:active { background: var(--panel2); }
+
+/* question-type progress and dashboard */
+.tsum { margin-bottom: 8px; color: var(--muted); }
+.tsum b { color: var(--text); }
+.trow { padding: 10px 0; border-top: 1px solid var(--line); margin-top: 10px; }
+.trow + .trow { margin-top: 0; }
+.trow .ex { font-size: 14.5px; line-height: 1.35; }
+.trow.lock .ex { color: var(--muted); }
+.trow.lock .lvl { color: var(--muted); border-color: var(--line); }
+.tst { display: flex; align-items: center; gap: 10px; margin-top: 6px; color: var(--muted); font-size: 13px; }
+.pips { display: inline-flex; gap: 3px; }
+.pips i { width: 14px; height: 6px; border-radius: 2px; background: var(--line); }
+.pips i.on { background: var(--accent); }
+.card .hint { margin-top: 10px; font-size: 13px; }
+.hero { display: flex; align-items: center; gap: 16px; }
+.hero .pct { font: 700 46px/1 var(--mono); color: var(--accent); flex: none; }
+.hero .pct small { font-size: 20px; }
+.hero .grow { flex: 1; min-width: 0; }
+.hero b { display: block; margin-bottom: 8px; }
+.hero span { display: block; color: var(--muted); font-size: 13px; margin-top: 8px; }
+.stat b small { font-size: 13px; color: var(--muted); font-weight: 500; }
+.days { display: flex; align-items: flex-end; gap: 4px; height: 120px; }
+.day { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; min-width: 0; }
+.day i { width: 100%; min-height: 2px; background: var(--accent); border-radius: 3px 3px 0 0; }
+.day .v { font: 500 10px/1 var(--mono); color: var(--muted); }
+.day .d { font: 500 10px/1 var(--mono); color: var(--muted); }
+.gl { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.gl span { color: var(--muted); font: 500 12.5px/1 var(--mono); white-space: nowrap; }
+.gl b { font-weight: 600; font-size: 15px; }
+.gl b.mut { color: var(--muted); font-weight: 500; }
+.grow1 + .grow1 { margin-top: 14px; }
+.crow { display: block; width: 100%; padding: 10px 0; }
+.crow + .crow { border-top: 1px solid var(--line); }
+.bar.ok i { background: var(--good); }

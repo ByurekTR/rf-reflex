@@ -1465,16 +1465,23 @@
     return q;
   }
   function moduleLevel(mod, stats) { return levelInfo(mod, stats).level; }
+  // A question type is mastered after NEED correct answers with at least 60 % accuracy.
+  var NEED = 5, DONE = {};
+  function typeState(mod, id, stats) {
+    var t = stats[mod.id + '.' + id] || { n: 0, c: 0 }, min = mod.types[id].min || 1;
+    return { id: id, min: min, n: t.n, c: t.c, mastered: t.c >= NEED && t.c / t.n >= 0.6, need: Math.max(0, NEED - t.c) };
+  }
   // Level 2 opens after about three correct answers per level-1 type, level 3 after the same for levels 1 and 2.
+  // A chapter is complete when every question type is mastered; once complete it stays complete (DONE is set by the app).
   function levelInfo(mod, stats) {
-    var c = 0, n1 = 0, n2 = 0;
+    var c = 0, n1 = 0, n2 = 0, total = 0, got = 0;
     Object.keys(mod.types).forEach(function (id) {
-      var s = stats[mod.id + '.' + id], min = mod.types[id].min || 1;
-      if (s) c += s.c;
-      if (min === 1) n1++; else if (min === 2) n2++;
+      var t = typeState(mod, id, stats);
+      c += t.c; total++; if (t.mastered) got++;
+      if (t.min === 1) n1++; else if (t.min === 2) n2++;
     });
     var at2 = Math.max(8, 3 * n1), at3 = Math.max(20, 3 * (n1 + n2)), L = c < at2 ? 1 : c < at3 ? 2 : 3;
-    return { level: L, correct: c, at: [0, at2, at3], next: L === 1 ? at2 : L === 2 ? at3 : null, complete: L === 3 && mastery(mod, stats) >= 0.85 };
+    return { level: L, correct: c, at: [0, at2, at3], next: L === 1 ? at2 : L === 2 ? at3 : null, types: total, mastered: got, left: total - got, complete: !!DONE[mod.id] || got === total };
   }
   function mastery(mod, stats) {
     var ids = Object.keys(mod.types), t = 0;
@@ -1486,7 +1493,7 @@
       var key = mod.id + '.' + id, s = stats[key];
       if (key === last && ids.length > 1) return 0;
       if (!s || !s.n) return 3;
-      return 1 + 3 * (1 - (s.c + 1) / (s.n + 2));
+      return (1 + 3 * (1 - (s.c + 1) / (s.n + 2))) * (typeState(mod, id, stats).mastered ? 0.35 : 1);
     });
     var tot = w.reduce(function (a, b) { return a + b; }, 0), r = rnd() * tot;
     for (var i = 0; i < ids.length; i++) { r -= w[i]; if (r <= 0) return generate(mod.id, ids[i], L); }
@@ -1570,7 +1577,7 @@
 
   var api = {
     MODULES: MODULES, GROUPS: GROUPS, BY_ID: BY_ID, calc: calc, fmt: fmt, ansStr: ansStr, check: check, choices: choices, hilo: hilo,
-    generate: generate, typeIds: typeIds, moduleLevel: moduleLevel, levelInfo: levelInfo, visible: visible, reveals: reveals, mastery: mastery, pickType: pickType, pickAny: pickAny,
+    generate: generate, typeIds: typeIds, moduleLevel: moduleLevel, levelInfo: levelInfo, typeState: typeState, NEED: NEED, setDone: function (d) { DONE = d || {}; }, visible: visible, reveals: reveals, mastery: mastery, pickType: pickType, pickAny: pickAny,
     SCENARIOS: SCENARIOS, SCENARIO_TITLES: SCENARIO_TITLES, scenarioIndex: scenarioIndex,
     setRng: function (f) { rnd = f || Math.random; }
   };

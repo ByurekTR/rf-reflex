@@ -2,17 +2,25 @@
 (function () {
   'use strict';
   var E = window.Engine, $app = document.getElementById('app');
-  var KEY = 'rfreflex.v1', VERSION = '1.2';
+  var KEY = 'rfreflex.v1', VERSION = '1.3';
   var st = load(), view = { name: 'home' }, sess = null, resetArmed = false;
 
-  function blank() { return { types: {}, best: {}, days: {}, scen: {}, settings: { input: 'auto' } }; }
+  function blank() { return { types: {}, best: {}, days: {}, scen: {}, done: {}, settings: { input: 'auto' } }; }
   function load() {
     try {
       var s = JSON.parse(localStorage.getItem(KEY) || 'null');
-      if (s && s.types) { var b = blank(); for (var k in b) if (!s[k]) s[k] = b[k]; return s; }
+      if (s && s.types) {
+        var b = blank(), old = !s.done;
+        for (var k in b) if (!s[k]) s[k] = b[k];
+        // Progress saved by versions before 1.3: keep every chapter that already counted as complete.
+        if (old) E.MODULES.forEach(function (m) { if (E.levelInfo(m, s.types).level === 3 && E.mastery(m, s.types) >= 0.85) s.done[m.id] = 1; });
+        return s;
+      }
     } catch (e) { }
     return blank();
   }
+  // Completion is permanent: once a chapter is complete it stays in Completed and keeps its hidden chapter revealed.
+  function syncDone() { E.setDone(st.done); E.MODULES.forEach(function (m) { if (!st.done[m.id] && E.levelInfo(m, st.types).complete) st.done[m.id] = 1; }); }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { } }
   function pad(n) { return n < 10 ? '0' + n : '' + n; }
   function dayStr(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
@@ -45,7 +53,8 @@
       '</b><span>answered today</span></div><div class="stat"><b>' + (t.acc == null ? '–' : t.acc + '%') + '</b><span>accuracy</span></div></section>';
     html += '<section class="cta"><button class="big primary" data-act="mix"><div class="grow"><b>Daily mix</b><span>20 questions, weighted to your weak spots</span></div></button>' +
       '<button class="big" data-act="scenario"><div class="grow"><b>Scenario: ' + h(E.SCENARIO_TITLES[idx]) + '</b><span>One real case, worked in steps</span></div>' +
-      (st.scen[today()] ? '<span class="done">DONE</span>' : '') + '</button></section>';
+      (st.scen[today()] ? '<span class="done">DONE</span>' : '') + '</button>' +
+      '<button class="big" data-act="dash"><div class="grow"><b>Progress</b><span>' + overall().pct + ' % of all question types mastered · ' + overall().done + ' of ' + E.MODULES.length + ' chapters complete</span></div></button></section>';
     function tile(m) {
       var li = E.levelInfo(m, st.types);
       return '<button class="mod' + (li.complete ? ' fin' : '') + '" data-act="mod" data-id="' + m.id + '"><div class="mod-h"><b>' + h(m.name) + '</b><span class="lvl' + (li.complete ? ' ok' : '') + '">' + (li.complete ? 'DONE' : 'L' + li.level) +
@@ -73,11 +82,56 @@
     return '<header class="head"><button class="icon" data-act="home" aria-label="Back">' + IC.back + '</button><h1>' + h(m.name) + '</h1><span class="lvl' + (li.complete ? ' ok' : '') + '">' + (li.complete ? 'COMPLETE' : 'LEVEL ' + li.level) + '</span></header>' +
       '<p class="blurb">' + h(m.blurb) + '</p>' +
       '<section class="card"><h3>Levels</h3>' + lv + '</section>' +
-      revealCard(m, li) + '<section class="card"><h3>Anchors</h3><ul class="anchors">' + m.anchors.map(function (a) { return '<li>' + h(a) + '</li>'; }).join('') + '</ul></section>' +
+      progressCard(m, li) + revealCard(m, li) + '<section class="card"><h3>Anchors</h3><ul class="anchors">' + m.anchors.map(function (a) { return '<li>' + h(a) + '</li>'; }).join('') + '</ul></section>' +
       '<section class="kv"><div class="stat"><b>' + t.n + '</b><span>answered</span></div><div class="stat"><b>' + (t.acc == null ? '–' : t.acc + '%') + '</b><span>accuracy</span></div><div class="stat"><b>' + (b == null ? '–' : b) + '</b><span>best 60 s</span></div></section>' +
       '<div class="actions"><button class="btn primary" data-act="start" data-mode="practice">Practice<small>10 questions, no clock</small></button>' +
       '<button class="btn" data-act="start" data-mode="sprint" data-dur="60">Sprint 60 s<small>As many as you can</small></button>' +
       '<button class="btn" data-act="start" data-mode="sprint" data-dur="120">Sprint 120 s</button></div>';
+  }
+  function overall() {
+    var tt = 0, tm = 0, done = 0;
+    E.MODULES.forEach(function (m) { var li = E.levelInfo(m, st.types); tt += li.types; tm += li.mastered; if (li.complete) done++; });
+    return { types: tt, mastered: tm, done: done, pct: Math.round(100 * tm / tt) };
+  }
+  function pips(t) { var o = ''; for (var i = 0; i < E.NEED; i++) o += '<i class="' + (i < t.c ? 'on' : '') + '"></i>'; return '<span class="pips">' + o + '</span>'; }
+  function progressCard(m, li) {
+    var ts = Object.keys(m.types).map(function (id) { return E.typeState(m, id, st.types); });
+    var open = ts.filter(function (t) { return !t.mastered && t.min <= li.level; }), html;
+    html = '<section class="card"><h3>Question types</h3><div class="tsum"><b>' + li.mastered + ' of ' + li.types + '</b> mastered' +
+      (li.left ? ' · <b>' + li.left + ' left</b>' + (li.complete ? '' : ' to complete the chapter') : ' · nothing left') + '</div><div class="bar"><i style="width:' + Math.round(100 * li.mastered / li.types) + '%"></i></div>';
+    open.forEach(function (t) {
+      html += '<div class="trow"><div class="ex"><span class="lvl">L' + t.min + '</span> ' + h(E.generate(m.id, t.id, li.level).prompt) + '</div><div class="tst">' + pips(t) +
+        '<span>' + (t.need ? t.need + ' more correct' : 'accuracy below 60 %, keep going') + '</span></div></div>';
+    });
+    [2, 3].forEach(function (L) {
+      var n = ts.filter(function (t) { return !t.mastered && t.min === L && L > li.level; }).length;
+      if (n) html += '<div class="trow lock"><div class="ex"><span class="lvl">L' + L + '</span> ' + n + ' more type' + (n > 1 ? 's' : '') + ' unlock at level ' + L + '</div></div>';
+    });
+    return html + '<p class="hint">A type is mastered after ' + E.NEED + ' correct answers with at least 60 % accuracy. The questions shown are examples of each type.</p></section>';
+  }
+  function dashPage() {
+    var o = overall(), t = totals(), shown = E.MODULES.filter(function (m) { return E.visible(m, st.types); }), hid = E.MODULES.filter(function (m) { return m.parents; });
+    var rev = hid.filter(function (m) { return E.visible(m, st.types); }).length, dayKeys = Object.keys(st.days), best = 0, html, d = new Date(), cols = [], max = 1, i;
+    dayKeys.forEach(function (k) { if (st.days[k] > best) best = st.days[k]; });
+    d.setDate(d.getDate() - 13);
+    for (i = 0; i < 14; i++) { var v = st.days[dayStr(d)] || 0; cols.push([d.getDate(), v]); if (v > max) max = v; d.setDate(d.getDate() + 1); }
+    html = '<header class="head"><button class="icon" data-act="home" aria-label="Back">' + IC.back + '</button><h1>Progress</h1></header>';
+    html += '<section class="card hero"><div class="pct">' + o.pct + '<small>%</small></div><div class="grow"><b>' + o.mastered + ' of ' + o.types + ' question types mastered</b><div class="bar"><i style="width:' + o.pct + '%"></i></div>' +
+      '<span>Across all ' + E.MODULES.length + ' chapters, including the ones still hidden.</span></div></section>';
+    html += '<section class="kv"><div class="stat"><b>' + o.done + '<small> / ' + E.MODULES.length + '</small></b><span>chapters complete</span></div><div class="stat"><b>' + rev + '<small> / ' + hid.length + '</small></b><span>hidden revealed</span></div><div class="stat"><b>' + streak() + '</b><span>day streak</span></div></section>';
+    html += '<section class="kv"><div class="stat"><b>' + t.n + '</b><span>answers in total</span></div><div class="stat"><b>' + (t.acc == null ? '–' : t.acc + '%') + '</b><span>accuracy</span></div><div class="stat"><b>' + dayKeys.length + '</b><span>days practised</span></div></section>';
+    html += '<section class="card"><h3>Last 14 days</h3><div class="days">' + cols.map(function (c) {
+      return '<div class="day"><span class="v">' + (c[1] || '') + '</span><i style="height:' + Math.round(100 * c[1] / max) + '%"></i><span class="d">' + c[0] + '</span></div>';
+    }).join('') + '</div><p class="hint">Answers per day. Best day so far: ' + best + '.</p></section>';
+    html += '<section class="card"><h3>By area</h3>' + E.GROUPS.map(function (g) {
+      var tt = 0, tm = 0; E.MODULES.forEach(function (m) { if (m.group === g) { var li = E.levelInfo(m, st.types); tt += li.types; tm += li.mastered; } });
+      return '<div class="grow1"><div class="gl"><b>' + g + '</b><span>' + tm + ' / ' + tt + ' types</span></div><div class="bar"><i style="width:' + Math.round(100 * tm / tt) + '%"></i></div></div>';
+    }).join('') + '</section>';
+    html += '<section class="card"><h3>Chapters</h3>' + shown.map(function (m) {
+      var li = E.levelInfo(m, st.types);
+      return '<button class="crow" data-act="mod" data-id="' + m.id + '"><div class="gl"><b>' + h(m.name) + '</b><span>' + li.mastered + ' / ' + li.types + ' · ' + (li.complete ? 'done' : 'level ' + li.level) + '</span></div><div class="bar' + (li.complete ? ' ok' : '') + '"><i style="width:' + Math.round(100 * li.mastered / li.types) + '%"></i></div></button>';
+    }).join('') + (hid.length - rev ? '<div class="crow"><div class="gl"><b class="mut">' + (hid.length - rev) + ' hidden chapters</b><span>not revealed yet</span></div><div class="bar"><i style="width:0"></i></div></div>' : '') + '</section>';
+    return html;
   }
   function revealCard(m, li) {
     var kids = E.reveals(m.id), open = kids.filter(function (k) { return E.visible(k, st.types); });
@@ -149,7 +203,7 @@
   }
   function render() {
     var n = view.name;
-    $app.innerHTML = n === 'home' ? home() : n === 'mod' ? modulePage(view.id) : n === 'session' ? sessionPage() : n === 'result' ? resultPage() : settingsPage();
+    $app.innerHTML = n === 'home' ? home() : n === 'mod' ? modulePage(view.id) : n === 'session' ? sessionPage() : n === 'result' ? resultPage() : n === 'dash' ? dashPage() : settingsPage();
     if (n !== 'session') window.scrollTo(0, 0);
   }
   function go(name, extra) { view = { name: name }; if (extra) for (var k in extra) view[k] = extra[k]; resetArmed = false; render(); }
@@ -196,7 +250,7 @@
   function record(q, ok) {
     if (q.key !== 'scenario') { var t = st.types[q.key] || (st.types[q.key] = { n: 0, c: 0, s: 0 }); t.n++; if (ok) { t.c++; t.s++; } else t.s = 0; }
     st.days[today()] = (st.days[today()] || 0) + 1;
-    save();
+    syncDone(); save();
   }
   function answer(kind, val) {
     if (!sess || sess.phase !== 'ask') return;
@@ -257,6 +311,7 @@
     var a = el.getAttribute('data-act');
     if (a === 'home') go('home');
     else if (a === 'settings') go('settings');
+    else if (a === 'dash') go('dash');
     else if (a === 'mod') go('mod', { id: el.getAttribute('data-id') });
     else if (a === 'start') { var m = el.getAttribute('data-mode'); start(m === 'sprint' ? { mode: 'sprint', modId: view.id, dur: +el.getAttribute('data-dur') } : { mode: 'practice', modId: view.id, total: 10 }); }
     else if (a === 'mix') start({ mode: 'mix', total: 20 });
@@ -269,7 +324,7 @@
     else if (a === 'next') next();
     else if (a === 'quit') quit();
     else if (a === 'input') { st.settings.input = el.getAttribute('data-v'); save(); render(); }
-    else if (a === 'reset') { if (resetArmed) { var keep = st.settings; st = blank(); st.settings = keep; save(); resetArmed = false; } else resetArmed = true; render(); }
+    else if (a === 'reset') { if (resetArmed) { var keep = st.settings; st = blank(); st.settings = keep; syncDone(); save(); resetArmed = false; } else resetArmed = true; render(); }
   });
   document.addEventListener('keydown', function (ev) {
     if (view.name !== 'session' || !sess) return;
@@ -287,5 +342,6 @@
     if (view.name === 'session') quit(); else go('home');
     return true;
   };
+  syncDone(); save();
   render();
 })();

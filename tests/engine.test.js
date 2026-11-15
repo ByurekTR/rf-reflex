@@ -105,6 +105,22 @@ E.MODULES.forEach(mod => {
   ok(mod.id + ' completes', E.levelInfo(mod, full).complete && E.levelInfo(mod, full).level === 3);
 });
 
+// 3bb. Per-type mastery, what is left, and sticky completion
+{
+  const m = E.BY_ID.db, st = {};
+  ok('nothing mastered at start', E.levelInfo(m, st).mastered === 0 && E.levelInfo(m, st).left === Object.keys(m.types).length);
+  st['db.p2db'] = { n: 5, c: 5, s: 5 };
+  ok('one mastered', E.levelInfo(m, st).mastered === 1 && E.typeState(m, 'p2db', st).mastered && E.typeState(m, 'db2p', st).need === 5);
+  st['db.db2p'] = { n: 20, c: 5, s: 0 };
+  ok('low accuracy is not mastery', !E.typeState(m, 'db2p', st).mastered);
+  st['db.v2db'] = { n: 4, c: 3, s: 0 };
+  ok('need counts down', E.typeState(m, 'v2db', st).need === 2);
+  E.setDone({ db: 1 });
+  ok('sticky completion', E.levelInfo(m, st).complete && E.visible(E.BY_ID.snr, st));
+  E.setDone({});
+  ok('not complete without it', !E.levelInfo(m, st).complete && !E.visible(E.BY_ID.snr, st));
+}
+
 // 3c. Hidden chapters: every base chapter reveals one, and only once it is complete
 const base = E.MODULES.filter(m => !m.parents), hidden = E.MODULES.filter(m => m.parents);
 ok('14 hidden chapters', hidden.length === 14, hidden.length);
